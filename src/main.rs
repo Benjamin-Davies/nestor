@@ -1,9 +1,9 @@
 use std::{fs, path::PathBuf};
 
-use clap::Parser;
-use nestor::scanner::Scanner;
+use clap::Parser as _;
+use nestor::analyze::{global::analyze, parse};
 
-#[derive(Debug, Parser)]
+#[derive(Debug, clap::Parser)]
 struct Cli {
     path: PathBuf,
 }
@@ -11,10 +11,12 @@ struct Cli {
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
-    let input = fs::read_to_string(cli.path)?;
-    for token in Scanner::new(&input) {
-        println!("{token:?}");
-    }
+    let source = fs::read(cli.path)?;
+    let tree = parse(&source)?;
+
+    let globals = analyze(tree.root_node(), &source);
+    dbg!(&globals.symbols[..10]);
+    dbg!(&globals.definitions[..10]);
 
     Ok(())
 }
