@@ -1,7 +1,7 @@
-use std::{fs, path::PathBuf};
+use std::path::PathBuf;
 
 use clap::Parser as _;
-use nestor::analyze::{global::analyze, parse};
+use nestor::analyze::dirs;
 
 #[derive(Debug, clap::Parser)]
 struct Cli {
@@ -9,14 +9,12 @@ struct Cli {
 }
 
 fn main() -> anyhow::Result<()> {
+    tracing_subscriber::fmt::init();
+
     let cli = Cli::parse();
 
-    let source = fs::read(cli.path)?;
-    let tree = parse(&source)?;
-
-    let globals = analyze(tree.root_node(), &source);
-    dbg!(&globals.symbols[..10]);
-    dbg!(&globals.definitions[..10]);
+    let result = dirs::analyze(&cli.path)?;
+    dbg!(result);
 
     Ok(())
 }

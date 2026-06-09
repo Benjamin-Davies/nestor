@@ -6,7 +6,8 @@ use std::{
 use anyhow::Context;
 use tree_sitter::{Language, Parser, Tree};
 
-pub mod global;
+pub mod dirs;
+pub mod globals;
 pub mod types;
 
 pub fn language() -> &'static Language {

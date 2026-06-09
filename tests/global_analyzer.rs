@@ -1,13 +1,13 @@
 use std::collections::BTreeSet;
 
-use nestor::analyze::{global::analyze, parse, types::Ident};
+use nestor::analyze::{globals, parse, types::Ident};
 
 const BTREE_C: &[u8] = include_bytes!("btree.c");
 
 #[test]
 fn test_analyze() {
     let tree = parse(BTREE_C).unwrap();
-    let globals = analyze(tree.root_node(), BTREE_C);
+    let globals = globals::analyze(tree.root_node(), BTREE_C);
 
     assert_eq!(globals.symbols.len(), 13596);
     // fn call

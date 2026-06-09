@@ -1,4 +1,4 @@
-//! Extract symbols that could be
+//! Extract symbols that could be used from other files.
 
 use std::sync::OnceLock;
 
