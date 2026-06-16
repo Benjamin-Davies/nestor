@@ -289,10 +289,12 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "crossbeam-channel",
  "itertools",
  "lsp-server",
  "lsp-types",
  "rayon",
+ "serde_json",
  "tracing",
  "tracing-subscriber",
  "tree-sitter",
