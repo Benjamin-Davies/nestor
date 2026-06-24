@@ -1,43 +1,37 @@
 use std::{
-    fs::File,
     io::{self, Write},
     sync::OnceLock,
 };
 
 use crossbeam_channel::Sender;
+use lsp_types::{LogMessageParams, MessageType};
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::{
     fmt::{self, MakeWriter},
     prelude::*,
 };
 
+use crate::messages::Notification;
+
 static LSP_SENDER: OnceLock<Sender<lsp_server::Message>> = OnceLock::new();
 
-struct LogWriter {
-    file: File,
-}
+struct LogWriter;
 
 impl Write for LogWriter {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        let message = String::from_utf8_lossy(buf).into_owned();
-
         if let Some(sender) = LSP_SENDER.get() {
-            let _ = sender.send(lsp_server::Message::Notification(
-                lsp_server::Notification {
-                    method: "window/logMessage".to_owned(),
-                    // TODO: strongly typed
-                    params: serde_json::json!({
-                        // MessageType::Log == 4
-                        "type": 4,
-                        "message": message,
-                    }),
-                },
-            ));
+            let message = String::from_utf8_lossy(buf).into_owned();
+
+            let _ = sender.send(
+                Notification::LogMessage(LogMessageParams {
+                    typ: MessageType::LOG,
+                    message,
+                })
+                .into(),
+            );
         }
 
-        let ret = self.file.write(buf)?;
-
-        Ok(ret)
+        Ok(buf.len())
     }
 
     fn flush(&mut self) -> io::Result<()> {
@@ -51,13 +45,7 @@ impl<'a> MakeWriter<'a> for MakeLogWriter {
     type Writer = LogWriter;
 
     fn make_writer(&'a self) -> Self::Writer {
-        let file = File::options()
-            .create(true)
-            .append(true)
-            .open("lsp.log") // TODO: choose a better location
-            .expect("failed to create log file");
-
-        LogWriter { file }
+        LogWriter
     }
 }
 
