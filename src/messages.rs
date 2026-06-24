@@ -172,3 +172,73 @@ fn to_value<T: Serialize>(value: T) -> Option<serde_json::Value> {
         .inspect_err(|err| tracing::error!("Error serializing message: {err}"))
         .ok()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn request_shutdown_from_lsp() {
+        let lsp_req = lsp_server::Request {
+            id: lsp_server::RequestId::from(1),
+            method: "shutdown".to_owned(),
+            params: serde_json::Value::Null,
+        };
+        assert!(matches!(
+            Request::try_from(lsp_req).unwrap(),
+            Request::Shutdown(_)
+        ));
+    }
+
+    #[test]
+    fn response_ok_to_lsp() {
+        let id = lsp_server::RequestId::from(42);
+        let lsp_resp = lsp_server::Response::from(Response::Ok(id.clone()));
+        assert_eq!(lsp_resp.id, id);
+        assert!(lsp_resp.result.is_none());
+        assert!(lsp_resp.error.is_none());
+    }
+
+    #[test]
+    fn notification_exit_from_lsp() {
+        let lsp_notif = lsp_server::Notification {
+            method: "exit".to_owned(),
+            params: serde_json::Value::Null,
+        };
+        assert!(matches!(
+            Notification::try_from(lsp_notif).unwrap(),
+            Notification::Exit
+        ));
+    }
+
+    #[test]
+    fn notification_log_message_to_lsp() {
+        let params = lsp_types::LogMessageParams {
+            typ: lsp_types::MessageType::INFO,
+            message: "hello".to_owned(),
+        };
+        let lsp_notif = lsp_server::Notification::from(Notification::LogMessage(params));
+        assert_eq!(lsp_notif.method, "window/logMessage");
+        assert_eq!(lsp_notif.params["message"], "hello");
+    }
+
+    #[test]
+    fn to_value_string() {
+        assert_eq!(
+            to_value("hello"),
+            Some(serde_json::Value::String("hello".into())),
+        );
+    }
+
+    #[test]
+    fn to_value_serialization_error_returns_none() {
+        struct AlwaysFails;
+        impl Serialize for AlwaysFails {
+            fn serialize<S: serde::Serializer>(&self, _: S) -> Result<S::Ok, S::Error> {
+                Err(serde::ser::Error::custom("forced error"))
+            }
+        }
+        // Must not panic — errors are swallowed via inspect_err + ok()
+        assert!(to_value(AlwaysFails).is_none());
+    }
+}
