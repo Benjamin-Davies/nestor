@@ -20,10 +20,12 @@ fn collect_symbols(
     source: &Bytes,
     symbols: &mut BTreeMap<Bytes, Vec<Range>>,
 ) {
-    let mut node = root;
+    let language = root.language();
+    let ident_kind = language.id_for_node_kind("identifier", true);
 
+    let mut node = root;
     loop {
-        if node.kind() == "identifier" {
+        if node.kind_id() == ident_kind {
             let name = source.slice(node.byte_range());
             let range = node.range().into();
             symbols.entry(name).or_default().push(range);
