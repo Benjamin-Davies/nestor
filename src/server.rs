@@ -8,6 +8,10 @@ use lsp_types::{
     PositionEncodingKind, ReferenceParams,
 };
 
+struct Server {
+    connection: lsp_server::Connection,
+}
+
 pub fn run_server(connection: lsp_server::Connection) -> anyhow::Result<()> {
     let (initialize_id, initialize_params) = connection.initialize_start()?;
 
@@ -23,10 +27,11 @@ pub fn run_server(connection: lsp_server::Connection) -> anyhow::Result<()> {
     })?;
     connection.initialize_finish(initialize_id, initialize_result)?;
 
+    let server = Server { connection };
     loop {
-        let message = connection.receiver.recv()?;
+        let message = server.connection.receiver.recv()?;
         match message {
-            Message::Request(request) => match handle_request(&connection, request) {
+            Message::Request(request) => match server.handle_request(request) {
                 Ok(ControlFlow::Continue(())) => {}
                 Ok(ControlFlow::Break(())) => break,
                 Err(err) => tracing::error!("Error handling request: {err}"),
@@ -34,7 +39,7 @@ pub fn run_server(connection: lsp_server::Connection) -> anyhow::Result<()> {
             Message::Response(response) => {
                 tracing::warn!("Received unexpected response: {response:?}");
             }
-            Message::Notification(notification) => match handle_notification(notification) {
+            Message::Notification(notification) => match server.handle_notification(notification) {
                 Ok(ControlFlow::Continue(())) => {}
                 Ok(ControlFlow::Break(())) => break,
                 Err(err) => tracing::error!("Error handling notification: {err}"),
@@ -57,50 +62,52 @@ fn server_capabilities() -> lsp_types::ServerCapabilities {
     }
 }
 
-fn handle_request(
-    connection: &lsp_server::Connection,
-    request: lsp_server::Request,
-) -> anyhow::Result<ControlFlow<()>> {
-    match Request::try_from(request)? {
-        Request::Shutdown(id) => {
-            connection.sender.send(Response::Ok(id).into())?;
+impl Server {
+    fn handle_request(&self, request: lsp_server::Request) -> anyhow::Result<ControlFlow<()>> {
+        match Request::try_from(request)? {
+            Request::Shutdown(id) => {
+                self.connection.sender.send(Response::Ok(id).into())?;
+            }
+            Request::GotoDefinition(
+                id,
+                GotoDefinitionParams {
+                    text_document_position_params,
+                    ..
+                },
+            ) => {
+                tracing::info!("Go to definition {text_document_position_params:?}");
+                self.connection.sender.send(Response::Ok(id).into())?;
+            }
+            Request::FindReferences(
+                id,
+                ReferenceParams {
+                    text_document_position,
+                    ..
+                },
+            ) => {
+                tracing::info!("Find references {text_document_position:?}");
+                self.connection.sender.send(Response::Ok(id).into())?;
+            }
         }
-        Request::GotoDefinition(
-            id,
-            GotoDefinitionParams {
-                text_document_position_params,
-                ..
-            },
-        ) => {
-            tracing::info!("Go to definition {text_document_position_params:?}");
-            connection.sender.send(Response::Ok(id).into())?;
-        }
-        Request::FindReferences(
-            id,
-            ReferenceParams {
-                text_document_position,
-                ..
-            },
-        ) => {
-            tracing::info!("Find references {text_document_position:?}");
-            connection.sender.send(Response::Ok(id).into())?;
-        }
+
+        Ok(ControlFlow::Continue(()))
     }
 
-    Ok(ControlFlow::Continue(()))
-}
+    fn handle_notification(
+        &self,
+        notification: lsp_server::Notification,
+    ) -> anyhow::Result<ControlFlow<()>> {
+        match Notification::try_from(notification)? {
+            Notification::Exit => return Ok(ControlFlow::Break(())),
+            Notification::DidOpenTextDocument(DidOpenTextDocumentParams { text_document }) => {
+                tracing::info!("Opened {}", text_document.uri.as_str());
+            }
+            Notification::DidCloseTextDocument(DidCloseTextDocumentParams { text_document }) => {
+                tracing::info!("Closed {}", text_document.uri.as_str());
+            }
+            _ => {}
+        }
 
-fn handle_notification(notification: lsp_server::Notification) -> anyhow::Result<ControlFlow<()>> {
-    match Notification::try_from(notification)? {
-        Notification::Exit => return Ok(ControlFlow::Break(())),
-        Notification::DidOpenTextDocument(DidOpenTextDocumentParams { text_document }) => {
-            tracing::info!("Opened {}", text_document.uri.as_str());
-        }
-        Notification::DidCloseTextDocument(DidCloseTextDocumentParams { text_document }) => {
-            tracing::info!("Closed {}", text_document.uri.as_str());
-        }
-        _ => {}
+        Ok(ControlFlow::Continue(()))
     }
-
-    Ok(ControlFlow::Continue(()))
 }
