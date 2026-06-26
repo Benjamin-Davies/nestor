@@ -1,15 +1,23 @@
-use std::ops::ControlFlow;
+use std::{collections::BTreeMap, ops::ControlFlow};
 
-use crate::messages::{Notification, Request, Response};
+use anyhow::Context;
 use clap::{crate_name, crate_version};
+use itertools::Itertools;
 use lsp_server::Message;
 use lsp_types::{
-    DidCloseTextDocumentParams, DidOpenTextDocumentParams, GotoDefinitionParams,
-    PositionEncodingKind, ReferenceParams,
+    DidCloseTextDocumentParams, DidOpenTextDocumentParams, GotoDefinitionParams, Location,
+    PositionEncodingKind, ReferenceParams, TextDocumentIdentifier, TextDocumentItem,
+    TextDocumentPositionParams, Uri,
+};
+
+use crate::{
+    document::Document,
+    messages::{Notification, Request, Response},
 };
 
 struct Server {
     connection: lsp_server::Connection,
+    documents: BTreeMap<Uri, Document>,
 }
 
 pub fn run_server(connection: lsp_server::Connection) -> anyhow::Result<()> {
@@ -27,7 +35,7 @@ pub fn run_server(connection: lsp_server::Connection) -> anyhow::Result<()> {
     })?;
     connection.initialize_finish(initialize_id, initialize_result)?;
 
-    let server = Server { connection };
+    let mut server = Server::new(connection);
     loop {
         let message = server.connection.receiver.recv()?;
         match message {
@@ -63,7 +71,14 @@ fn server_capabilities() -> lsp_types::ServerCapabilities {
 }
 
 impl Server {
-    fn handle_request(&self, request: lsp_server::Request) -> anyhow::Result<ControlFlow<()>> {
+    fn new(connection: lsp_server::Connection) -> Self {
+        Self {
+            connection,
+            documents: BTreeMap::new(),
+        }
+    }
+
+    fn handle_request(&mut self, request: lsp_server::Request) -> anyhow::Result<ControlFlow<()>> {
         match Request::try_from(request)? {
             Request::Shutdown(id) => {
                 self.connection.sender.send(Response::Ok(id).into())?;
@@ -81,12 +96,33 @@ impl Server {
             Request::FindReferences(
                 id,
                 ReferenceParams {
-                    text_document_position,
+                    text_document_position:
+                        TextDocumentPositionParams {
+                            text_document: TextDocumentIdentifier { uri },
+                            position,
+                        },
                     ..
                 },
             ) => {
-                tracing::info!("Find references {text_document_position:?}");
-                self.connection.sender.send(Response::Ok(id).into())?;
+                tracing::info!("Find references {uri:?} {position:?}");
+
+                let document = self.documents.get(&uri).context("No such open document")?;
+                let ident = document
+                    .ident_at(position.into())
+                    .context("No ident at cursor")?;
+                let references = document.find_references(ident);
+
+                let locations = references
+                    .into_iter()
+                    .map(|range| Location {
+                        uri: uri.clone(),
+                        range: range.into(),
+                    })
+                    .collect_vec();
+
+                self.connection
+                    .sender
+                    .send(Response::Locations(id, locations).into())?;
             }
         }
 
@@ -94,20 +130,36 @@ impl Server {
     }
 
     fn handle_notification(
-        &self,
+        &mut self,
         notification: lsp_server::Notification,
     ) -> anyhow::Result<ControlFlow<()>> {
         match Notification::try_from(notification)? {
             Notification::Exit => return Ok(ControlFlow::Break(())),
             Notification::DidOpenTextDocument(DidOpenTextDocumentParams { text_document }) => {
                 tracing::info!("Opened {}", text_document.uri.as_str());
+
+                self.load_document(text_document)?;
             }
             Notification::DidCloseTextDocument(DidCloseTextDocumentParams { text_document }) => {
                 tracing::info!("Closed {}", text_document.uri.as_str());
+
+                self.discard_document(&text_document.uri);
             }
             _ => {}
         }
 
         Ok(ControlFlow::Continue(()))
+    }
+
+    fn load_document(&mut self, text_document: TextDocumentItem) -> anyhow::Result<()> {
+        let uri = text_document.uri.clone();
+        let document = Document::try_from(text_document)?;
+        self.documents.insert(uri, document);
+
+        Ok(())
+    }
+
+    fn discard_document(&mut self, uri: &Uri) {
+        self.documents.remove(uri);
     }
 }

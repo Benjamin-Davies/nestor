@@ -8,6 +8,7 @@ use tree_sitter::{Language, Parser, Tree};
 
 pub mod dirs;
 pub mod globals;
+pub mod locals;
 pub mod types;
 
 pub fn language() -> &'static Language {

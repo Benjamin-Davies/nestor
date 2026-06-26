@@ -53,11 +53,29 @@ impl From<tree_sitter::Point> for Point {
     }
 }
 
+impl From<Point> for tree_sitter::Point {
+    fn from(value: Point) -> Self {
+        Self {
+            row: value.row as usize,
+            column: value.column as usize,
+        }
+    }
+}
+
 impl From<Range> for lsp_types::Range {
     fn from(value: Range) -> Self {
         lsp_types::Range {
             start: value.start.into(),
             end: value.end.into(),
+        }
+    }
+}
+
+impl From<lsp_types::Position> for Point {
+    fn from(value: lsp_types::Position) -> Self {
+        Point {
+            row: value.line,
+            column: value.character,
         }
     }
 }

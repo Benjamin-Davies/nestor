@@ -1,3 +1,4 @@
+use lsp_types::{GotoDefinitionResponse, Location};
 use serde::Serialize;
 
 macro_rules! define_request {
@@ -38,13 +39,13 @@ macro_rules! define_request {
 macro_rules! define_response {
     (
         $(
-            $variant:ident ( $params:ident ),
+            $variant:ident ( $params:ty ),
         )*
     ) => {
         pub enum Response {
             Ok(lsp_server::RequestId),
             $(
-                $variant ( lsp_server::RequestId, lsp_types::$params ),
+                $variant ( lsp_server::RequestId, $params ),
             )*
         }
 
@@ -61,7 +62,7 @@ macro_rules! define_response {
                             id,
                             result: to_value(params),
                             error: None,
-                        }
+                        },
                     )*
                 }
             }
@@ -144,6 +145,7 @@ define_request! {
 
 define_response! {
     GotoDefinition(GotoDefinitionResponse),
+    Locations(Vec<Location>),
 }
 
 define_notification! {
