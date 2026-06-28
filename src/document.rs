@@ -3,7 +3,7 @@ use lsp_types::TextDocumentItem;
 
 use crate::analyze::{
     locals, parse,
-    types::{Point, Range},
+    types::{Ident, Point, Range},
 };
 
 pub struct Document {
@@ -53,5 +53,16 @@ impl Document {
         let symbols = self.locals.symbols.get(&ident_bytes);
 
         symbols.cloned().unwrap_or_default()
+    }
+
+    pub fn goto_definition(&self, ident: tree_sitter::Node) -> Vec<Range> {
+        let ident = Ident {
+            bytes: &self.source[ident.byte_range()],
+            range: ident.range().into(),
+        };
+
+        let definitions = self.locals.definitions(ident);
+
+        definitions.into_iter().map(|d| d.name).collect()
     }
 }

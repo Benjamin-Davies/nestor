@@ -35,3 +35,28 @@ pub fn parse(source: &[u8]) -> anyhow::Result<Tree> {
         parser.parse(source, None).context("error parsing source")
     })
 }
+
+const IDENTIFIER_KIND: u16 = 1;
+const FUNCTION_DEFINITION_KIND: u16 = 196;
+const FUNCTION_DECLARATOR_KIND: u16 = 230;
+
+#[cfg(test)]
+mod tests {
+    use crate::analyze::{
+        FUNCTION_DECLARATOR_KIND, FUNCTION_DEFINITION_KIND, IDENTIFIER_KIND, language,
+    };
+
+    #[test]
+    fn kind_ids() {
+        let l = language();
+        assert_eq!(IDENTIFIER_KIND, l.id_for_node_kind("identifier", true));
+        assert_eq!(
+            FUNCTION_DEFINITION_KIND,
+            l.id_for_node_kind("function_definition", true)
+        );
+        assert_eq!(
+            FUNCTION_DECLARATOR_KIND,
+            l.id_for_node_kind("function_declarator", true)
+        );
+    }
+}

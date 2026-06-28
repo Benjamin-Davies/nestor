@@ -1,5 +1,6 @@
-use std::{borrow::Cow, fmt};
+use std::{borrow::Cow, fmt, str::FromStr};
 
+use anyhow::Context;
 use tree_sitter::Node;
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -32,6 +33,12 @@ impl<'a> Ident<'a> {
 
     pub fn to_str(&self) -> Cow<'a, str> {
         String::from_utf8_lossy(self.bytes)
+    }
+}
+
+impl Range {
+    pub fn contains(self, other: Self) -> bool {
+        self.start <= other.start && other.end <= self.end
     }
 }
 
@@ -107,6 +114,24 @@ impl fmt::Debug for Range {
     }
 }
 
+impl FromStr for Range {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> anyhow::Result<Self> {
+        if let Some((start, end)) = s.split_once('-') {
+            let start = start.parse()?;
+            let end = end.parse()?;
+            Ok(Range { start, end })
+        } else {
+            let point = s.parse()?;
+            Ok(Range {
+                start: point,
+                end: point,
+            })
+        }
+    }
+}
+
 impl fmt::Display for Point {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}:{}", self.row + 1, self.column)
@@ -116,5 +141,39 @@ impl fmt::Display for Point {
 impl fmt::Debug for Point {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         fmt::Display::fmt(self, f)
+    }
+}
+
+impl FromStr for Point {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let (row, column) = s.split_once(':').context("Expected ':' in point")?;
+        Ok(Point {
+            row: row.parse::<u32>()?.saturating_sub(1),
+            column: column.parse::<u32>()?,
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::analyze::types::Range;
+
+    #[test]
+    fn range_contains() {
+        let a = "1:0-5:0".parse::<Range>().unwrap();
+        let b = "3:0-7:0".parse::<Range>().unwrap();
+        let c = "1:0-10:0".parse::<Range>().unwrap();
+
+        assert!(a.contains(a));
+        assert!(!a.contains(b));
+        assert!(!a.contains(c));
+        assert!(!b.contains(a));
+        assert!(b.contains(b));
+        assert!(!b.contains(c));
+        assert!(c.contains(a));
+        assert!(c.contains(b));
+        assert!(c.contains(c));
     }
 }

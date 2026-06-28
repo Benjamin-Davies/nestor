@@ -23,7 +23,6 @@ struct Server {
 pub fn run_server(connection: lsp_server::Connection) -> anyhow::Result<()> {
     let (initialize_id, initialize_params) = connection.initialize_start()?;
 
-    tracing::info!("InitializeParams: {}", initialize_params);
     let lsp_types::InitializeParams { .. } = serde_json::from_value(initialize_params)?;
 
     let initialize_result = serde_json::to_value(lsp_types::InitializeResult {
@@ -86,12 +85,34 @@ impl Server {
             Request::GotoDefinition(
                 id,
                 GotoDefinitionParams {
-                    text_document_position_params,
+                    text_document_position_params:
+                        TextDocumentPositionParams {
+                            text_document: TextDocumentIdentifier { uri },
+                            position,
+                        },
                     ..
                 },
             ) => {
-                tracing::info!("Go to definition {text_document_position_params:?}");
-                self.connection.sender.send(Response::Ok(id).into())?;
+                tracing::info!("Go to definition {} {position:?}", uri.as_str());
+
+                let document = self.documents.get(&uri).context("No such open document")?;
+                let ident = document
+                    .ident_at(position.into())
+                    .context("No ident at cursor")?;
+                let definitions = document.goto_definition(ident);
+                tracing::info!("{definitions:?}");
+
+                let locations = definitions
+                    .into_iter()
+                    .map(|range| Location {
+                        uri: uri.clone(),
+                        range: range.into(),
+                    })
+                    .collect_vec();
+
+                self.connection
+                    .sender
+                    .send(Response::Locations(id, locations).into())?;
             }
             Request::FindReferences(
                 id,
@@ -104,7 +125,7 @@ impl Server {
                     ..
                 },
             ) => {
-                tracing::info!("Find references {uri:?} {position:?}");
+                tracing::info!("Find references {} {position:?}", uri.as_str());
 
                 let document = self.documents.get(&uri).context("No such open document")?;
                 let ident = document

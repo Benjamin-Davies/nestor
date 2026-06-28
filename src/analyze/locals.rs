@@ -1,34 +1,97 @@
 use std::collections::BTreeMap;
 
 use bytes::Bytes;
+use itertools::Itertools;
 
-use crate::analyze::types::Range;
+use crate::analyze::{
+    FUNCTION_DECLARATOR_KIND, FUNCTION_DEFINITION_KIND, IDENTIFIER_KIND,
+    locals::State::Start,
+    types::{Ident, Range},
+};
 
+#[derive(Debug, Default)]
 pub struct Locals {
     pub symbols: BTreeMap<Bytes, Vec<Range>>,
+    pub definitions: BTreeMap<Bytes, Vec<Definition>>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct Definition {
+    pub name: Range,
+    pub scope: Range,
 }
 
 pub fn analyze(node: tree_sitter::Node, source: &Bytes) -> Locals {
-    let mut symbols = BTreeMap::new();
-    collect_symbols(node, source, &mut symbols);
+    let mut locals = Locals::default();
+    collect_symbols(node, source, &mut locals);
 
-    Locals { symbols }
+    locals
 }
 
-fn collect_symbols(
-    root: tree_sitter::Node,
-    source: &Bytes,
-    symbols: &mut BTreeMap<Bytes, Vec<Range>>,
-) {
-    let language = root.language();
-    let ident_kind = language.id_for_node_kind("identifier", true);
+impl Locals {
+    pub fn definitions(&self, ident: Ident) -> Vec<&Definition> {
+        let Some(defs) = self.definitions.get(ident.bytes) else {
+            return Vec::new();
+        };
+
+        defs.iter()
+            .filter(|d| {
+                tracing::info!("{d:?}");
+                d.scope.contains(ident.range)
+            })
+            .collect_vec()
+    }
+}
+
+enum State {
+    Start,
+    FnDef { new_scope: Range },
+    FnDefName { new_scope: Range },
+}
+
+fn collect_symbols(root: tree_sitter::Node, source: &Bytes, locals: &mut Locals) {
+    let root_range = Range::from(root.range());
 
     let mut node = root;
+    let mut state = State::Start;
+    let mut scope = root_range;
     loop {
-        if node.kind_id() == ident_kind {
-            let name = source.slice(node.byte_range());
-            let range = node.range().into();
-            symbols.entry(name).or_default().push(range);
+        let kind = node.kind_id();
+        let range = node.range().into();
+
+        if !scope.contains(range) {
+            scope = root_range;
+        }
+
+        match kind {
+            IDENTIFIER_KIND => {
+                let name = source.slice(node.byte_range());
+                locals.symbols.entry(name.clone()).or_default().push(range);
+
+                match state {
+                    State::FnDefName { new_scope } => {
+                        locals
+                            .definitions
+                            .entry(name)
+                            .or_default()
+                            .push(Definition { name: range, scope });
+
+                        state = Start;
+                        scope = new_scope;
+                    }
+                    _ => {}
+                }
+            }
+            FUNCTION_DEFINITION_KIND => {
+                state = State::FnDef { new_scope: range };
+            }
+            FUNCTION_DECLARATOR_KIND => match state {
+                State::FnDef { new_scope } => {
+                    state = State::FnDefName { new_scope };
+                }
+                _ => {}
+            },
+            _ => {}
         }
 
         // Descend into children first (pre-order), otherwise try the next
