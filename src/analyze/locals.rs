@@ -30,7 +30,7 @@ pub fn analyze(node: tree_sitter::Node, source: &Bytes) -> Locals {
 
 impl Locals {
     pub fn definitions(&self, ident: Ident) -> Vec<&Definition> {
-        let Some(defs) = self.definitions.get(ident.bytes) else {
+        let Some(defs) = self.definitions.get(&ident.bytes) else {
             return Vec::new();
         };
 

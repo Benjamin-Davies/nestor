@@ -1,11 +1,12 @@
 use std::{borrow::Cow, fmt, str::FromStr};
 
 use anyhow::Context;
+use bytes::Bytes;
 use tree_sitter::Node;
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Ident<'a> {
-    pub bytes: &'a [u8],
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Ident {
+    pub bytes: Bytes,
     pub range: Range,
 }
 
@@ -21,18 +22,18 @@ pub struct Point {
     pub column: u32,
 }
 
-impl<'a> Ident<'a> {
-    pub fn from_node(node: Node, source: &'a [u8]) -> Ident<'a> {
+impl Ident {
+    pub fn from_node(node: Node, source: &Bytes) -> Ident {
         debug_assert_eq!(node.kind(), "identifier");
 
         Ident {
-            bytes: &source[node.byte_range()],
+            bytes: source.slice(node.byte_range()),
             range: node.range().into(),
         }
     }
 
-    pub fn to_str(&self) -> Cow<'a, str> {
-        String::from_utf8_lossy(self.bytes)
+    pub fn to_str(&self) -> Cow<'_, str> {
+        String::from_utf8_lossy(&self.bytes)
     }
 }
 
@@ -96,7 +97,7 @@ impl From<Point> for lsp_types::Position {
     }
 }
 
-impl fmt::Debug for Ident<'_> {
+impl fmt::Debug for Ident {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?} ({})", self.to_str(), self.range)
     }

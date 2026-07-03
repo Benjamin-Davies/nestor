@@ -5,25 +5,29 @@ use clap::{crate_name, crate_version};
 use itertools::Itertools;
 use lsp_server::Message;
 use lsp_types::{
-    DidCloseTextDocumentParams, DidOpenTextDocumentParams, GotoDefinitionParams, Location,
-    PositionEncodingKind, ReferenceParams, TextDocumentIdentifier, TextDocumentItem,
-    TextDocumentPositionParams, Uri,
+    DidChangeWorkspaceFoldersParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
+    GotoDefinitionParams, Location, PositionEncodingKind, ReferenceParams, TextDocumentIdentifier,
+    TextDocumentItem, TextDocumentPositionParams, Uri,
 };
 
 use crate::{
     document::Document,
+    globals::GlobalsStore,
     messages::{Notification, Request, Response},
 };
 
 struct Server {
     connection: lsp_server::Connection,
     documents: BTreeMap<Uri, Document>,
+    globals_store: GlobalsStore,
 }
 
 pub fn run_server(connection: lsp_server::Connection) -> anyhow::Result<()> {
     let (initialize_id, initialize_params) = connection.initialize_start()?;
 
-    let lsp_types::InitializeParams { .. } = serde_json::from_value(initialize_params)?;
+    let lsp_types::InitializeParams {
+        workspace_folders, ..
+    } = serde_json::from_value(initialize_params)?;
 
     let initialize_result = serde_json::to_value(lsp_types::InitializeResult {
         capabilities: server_capabilities(),
@@ -34,7 +38,14 @@ pub fn run_server(connection: lsp_server::Connection) -> anyhow::Result<()> {
     })?;
     connection.initialize_finish(initialize_id, initialize_result)?;
 
-    let mut server = Server::new(connection);
+    let mut globals_store = GlobalsStore::new();
+    globals_store.set_workspace_folders(&workspace_folders.unwrap_or_default());
+
+    let mut server = Server {
+        connection: connection,
+        documents: BTreeMap::new(),
+        globals_store,
+    };
     loop {
         let message = server.connection.receiver.recv()?;
         match message {
@@ -70,13 +81,6 @@ fn server_capabilities() -> lsp_types::ServerCapabilities {
 }
 
 impl Server {
-    fn new(connection: lsp_server::Connection) -> Self {
-        Self {
-            connection,
-            documents: BTreeMap::new(),
-        }
-    }
-
     fn handle_request(&mut self, request: lsp_server::Request) -> anyhow::Result<ControlFlow<()>> {
         match Request::try_from(request)? {
             Request::Shutdown(id) => {
@@ -131,15 +135,7 @@ impl Server {
                 let ident = document
                     .ident_at(position.into())
                     .context("No ident at cursor")?;
-                let references = document.find_references(ident);
-
-                let locations = references
-                    .into_iter()
-                    .map(|range| Location {
-                        uri: uri.clone(),
-                        range: range.into(),
-                    })
-                    .collect_vec();
+                let locations = self.find_references(&uri, document, ident);
 
                 self.connection
                     .sender
@@ -166,6 +162,14 @@ impl Server {
 
                 self.discard_document(&text_document.uri);
             }
+            Notification::DidChangeWorkspaceFolders(DidChangeWorkspaceFoldersParams { event }) => {
+                for added in &event.added {
+                    self.globals_store.add_workspace_folder(added);
+                }
+                for removed in &event.removed {
+                    self.globals_store.remove_workspace_folder(removed);
+                }
+            }
             _ => {}
         }
 
@@ -173,6 +177,8 @@ impl Server {
     }
 
     fn load_document(&mut self, text_document: TextDocumentItem) -> anyhow::Result<()> {
+        self.globals_store.seed(&text_document.uri)?;
+
         let uri = text_document.uri.clone();
         let document = Document::try_from(text_document)?;
         self.documents.insert(uri, document);
@@ -182,5 +188,38 @@ impl Server {
 
     fn discard_document(&mut self, uri: &Uri) {
         self.documents.remove(uri);
+
+        self.globals_store.unseed(uri);
+    }
+
+    fn find_references(
+        &self,
+        uri: &Uri,
+        document: &Document,
+        ident: tree_sitter::Node,
+    ) -> Vec<Location> {
+        let references = document.find_references(ident);
+        let mut locations = references
+            .into_iter()
+            .map(|range| Location {
+                uri: uri.clone(),
+                range: range.into(),
+            })
+            .collect_vec();
+
+        let global_references = self
+            .globals_store
+            .find_references(document.bytes_for(ident));
+        locations.extend(
+            global_references
+                .into_iter()
+                .filter(|s| &s.uri != uri)
+                .map(|s| Location {
+                    uri: s.uri,
+                    range: s.range.into(),
+                }),
+        );
+
+        locations
     }
 }

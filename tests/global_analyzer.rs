@@ -1,5 +1,6 @@
 use std::collections::BTreeSet;
 
+use bytes::Bytes;
 use nestor::analyze::{globals, parse, types::Ident};
 
 const BTREE_C: &[u8] = include_bytes!("btree.c");
@@ -7,7 +8,7 @@ const BTREE_C: &[u8] = include_bytes!("btree.c");
 #[test]
 fn test_analyze() {
     let tree = parse(BTREE_C).unwrap();
-    let globals = globals::analyze(tree.root_node(), BTREE_C);
+    let globals = globals::analyze(tree.root_node(), Bytes::from(BTREE_C));
 
     assert_eq!(globals.symbols.len(), 13596);
     // fn call
@@ -15,7 +16,7 @@ fn test_analyze() {
         globals
             .symbols
             .iter()
-            .any(|n| n.bytes == b"sqlite3BeginBenignMalloc")
+            .any(|n| &*n.bytes == b"sqlite3BeginBenignMalloc")
     );
 
     assert_eq!(globals.definitions.len(), 83);

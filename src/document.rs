@@ -57,12 +57,16 @@ impl Document {
 
     pub fn goto_definition(&self, ident: tree_sitter::Node) -> Vec<Range> {
         let ident = Ident {
-            bytes: &self.source[ident.byte_range()],
+            bytes: self.source.slice(ident.byte_range()),
             range: ident.range().into(),
         };
 
         let definitions = self.locals.definitions(ident);
 
         definitions.into_iter().map(|d| d.name).collect()
+    }
+
+    pub fn bytes_for<'a>(&'a self, node: tree_sitter::Node) -> &'a [u8] {
+        &self.source[node.byte_range()]
     }
 }

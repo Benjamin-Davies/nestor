@@ -154,6 +154,7 @@ define_notification! {
     DidChangeTextDocument(DidChangeTextDocumentParams) = "textDocument/didChange",
     DidCloseTextDocument(DidCloseTextDocumentParams) = "textDocument/didClose",
     DidChangeConfiguration(DidChangeConfigurationParams) = "workspace/didChangeConfiguration",
+    DidChangeWorkspaceFolders(DidChangeWorkspaceFoldersParams) = "workspace/didChangeWorkspaceFolders",
     LogMessage(LogMessageParams) = "window/logMessage",
 }
 

@@ -2,14 +2,15 @@
 
 use std::sync::OnceLock;
 
+use bytes::Bytes;
 use tree_sitter::{Node, Query, QueryCursor, StreamingIterator};
 
 use crate::analyze::{language, types::Ident};
 
 #[derive(Debug, Default)]
-pub struct Globals<'a> {
-    pub symbols: Vec<Ident<'a>>,
-    pub definitions: Vec<Ident<'a>>,
+pub struct Globals {
+    pub symbols: Vec<Ident>,
+    pub definitions: Vec<Ident>,
 }
 
 pub fn ident_query() -> &'static Query {
@@ -54,11 +55,11 @@ pub fn var_decl_query() -> &'static Query {
     QUERY.get_or_init(|| Query::new(language(), SOURCE).expect("error parsing query"))
 }
 
-pub fn analyze<'a>(node: Node, source: &'a [u8]) -> Globals<'a> {
+pub fn analyze<'a>(node: Node, source: Bytes) -> Globals {
     let mut globals = Globals::default();
 
     let mut cursor = QueryCursor::new();
-    let mut matches = cursor.matches(ident_query(), node, source);
+    let mut matches = cursor.matches(ident_query(), node, &*source);
     while let Some(m) = matches.next() {
         for capture in m.captures {
             let node = capture.node;
@@ -66,13 +67,13 @@ pub fn analyze<'a>(node: Node, source: &'a [u8]) -> Globals<'a> {
                 continue;
             }
 
-            let ident = Ident::from_node(node, source);
+            let ident = Ident::from_node(node, &source);
             globals.symbols.push(ident);
         }
     }
 
     let mut cursor = QueryCursor::new();
-    let mut matches = cursor.matches(fn_def_query(), node, source);
+    let mut matches = cursor.matches(fn_def_query(), node, &*source);
     while let Some(m) = matches.next() {
         'captures: for capture in m.captures {
             let node = capture.node;
@@ -88,7 +89,7 @@ pub fn analyze<'a>(node: Node, source: &'a [u8]) -> Globals<'a> {
                         continue;
                     }
 
-                    let ident = Ident::from_node(node, source);
+                    let ident = Ident::from_node(node, &source);
                     globals.definitions.push(ident);
                 }
                 kind => unreachable!("{kind}"),
@@ -97,7 +98,7 @@ pub fn analyze<'a>(node: Node, source: &'a [u8]) -> Globals<'a> {
     }
 
     let mut cursor = QueryCursor::new();
-    let mut matches = cursor.matches(var_decl_query(), node, source);
+    let mut matches = cursor.matches(var_decl_query(), node, &*source);
     while let Some(m) = matches.next() {
         'captures: for capture in m.captures {
             let node = capture.node;
@@ -117,7 +118,7 @@ pub fn analyze<'a>(node: Node, source: &'a [u8]) -> Globals<'a> {
                         continue;
                     }
 
-                    let ident = Ident::from_node(node, source);
+                    let ident = Ident::from_node(node, &source);
                     globals.definitions.push(ident);
                 }
                 kind => unreachable!("{kind}"),
