@@ -55,7 +55,7 @@ impl Document {
         symbols.cloned().unwrap_or_default()
     }
 
-    pub fn goto_definition(&self, ident: tree_sitter::Node) -> Vec<Range> {
+    pub fn find_definitions(&self, ident: tree_sitter::Node) -> Vec<Range> {
         let ident = Ident {
             bytes: self.source.slice(ident.byte_range()),
             range: ident.range().into(),

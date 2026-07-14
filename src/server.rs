@@ -6,8 +6,8 @@ use itertools::Itertools;
 use lsp_server::Message;
 use lsp_types::{
     DidChangeWorkspaceFoldersParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
-    GotoDefinitionParams, Location, PositionEncodingKind, ReferenceParams, TextDocumentIdentifier,
-    TextDocumentItem, TextDocumentPositionParams, Uri,
+    GotoDefinitionParams, Location, Position, PositionEncodingKind, ReferenceParams,
+    TextDocumentIdentifier, TextDocumentItem, TextDocumentPositionParams, Uri,
 };
 
 use crate::{
@@ -99,20 +99,7 @@ impl Server {
             ) => {
                 tracing::info!("Go to definition {} {position:?}", uri.as_str());
 
-                let document = self.documents.get(&uri).context("No such open document")?;
-                let ident = document
-                    .ident_at(position.into())
-                    .context("No ident at cursor")?;
-                let definitions = document.goto_definition(ident);
-                tracing::info!("{definitions:?}");
-
-                let locations = definitions
-                    .into_iter()
-                    .map(|range| Location {
-                        uri: uri.clone(),
-                        range: range.into(),
-                    })
-                    .collect_vec();
+                let locations = self.find_definitions(&uri, position)?;
 
                 self.connection
                     .sender
@@ -131,11 +118,7 @@ impl Server {
             ) => {
                 tracing::info!("Find references {} {position:?}", uri.as_str());
 
-                let document = self.documents.get(&uri).context("No such open document")?;
-                let ident = document
-                    .ident_at(position.into())
-                    .context("No ident at cursor")?;
-                let locations = self.find_references(&uri, document, ident);
+                let locations = self.find_references(&uri, position)?;
 
                 self.connection
                     .sender
@@ -192,12 +175,49 @@ impl Server {
         self.globals_store.unseed(uri);
     }
 
-    fn find_references(
-        &self,
+    fn find_definitions(
+        &mut self,
         uri: &Uri,
-        document: &Document,
-        ident: tree_sitter::Node,
-    ) -> Vec<Location> {
+        position: Position,
+    ) -> Result<Vec<Location>, anyhow::Error> {
+        let document = self.documents.get(uri).context("No such open document")?;
+        let ident = document
+            .ident_at(position.into())
+            .context("No ident at cursor")?;
+
+        let definitions = document.find_definitions(ident);
+        let locations = definitions
+            .into_iter()
+            .map(|range| Location {
+                uri: uri.clone(),
+                range: range.into(),
+            })
+            .collect_vec();
+        if !locations.is_empty() {
+            return Ok(locations);
+        }
+
+        let global_definitions = self
+            .globals_store
+            .find_definitions(document.bytes_for(ident));
+        let global_locations = global_definitions
+            .into_iter()
+            .filter(|s| &s.uri != uri)
+            .map(|s| Location {
+                uri: s.uri,
+                range: s.range.into(),
+            })
+            .collect_vec();
+
+        Ok(global_locations)
+    }
+
+    fn find_references(&self, uri: &Uri, position: Position) -> anyhow::Result<Vec<Location>> {
+        let document = self.documents.get(uri).context("No such open document")?;
+        let ident = document
+            .ident_at(position.into())
+            .context("No ident at cursor")?;
+
         let references = document.find_references(ident);
         let mut locations = references
             .into_iter()
@@ -220,6 +240,6 @@ impl Server {
                 }),
         );
 
-        locations
+        Ok(locations)
     }
 }
