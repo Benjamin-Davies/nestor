@@ -4,8 +4,8 @@ use bytes::Bytes;
 use itertools::Itertools;
 
 use crate::analyze::{
-    FUNCTION_DECLARATOR_KIND, FUNCTION_DEFINITION_KIND, IDENTIFIER_KIND,
-    locals::State::Start,
+    DECLARATION_KIND, FUNCTION_DECLARATOR_KIND, FUNCTION_DEFINITION_KIND, IDENTIFIER_KIND,
+    PARAMETER_DECLARATION_KIND,
     types::{Ident, Range},
 };
 
@@ -45,6 +45,7 @@ impl Locals {
 
 enum State {
     Start,
+    VarDef,
     FnDef { new_scope: Range },
     FnDefName { new_scope: Range },
 }
@@ -69,6 +70,15 @@ fn collect_symbols(root: tree_sitter::Node, source: &Bytes, locals: &mut Locals)
                 locals.symbols.entry(name.clone()).or_default().push(range);
 
                 match state {
+                    State::VarDef => {
+                        locals
+                            .definitions
+                            .entry(name)
+                            .or_default()
+                            .push(Definition { name: range, scope });
+
+                        state = State::Start;
+                    }
                     State::FnDefName { new_scope } => {
                         locals
                             .definitions
@@ -76,11 +86,14 @@ fn collect_symbols(root: tree_sitter::Node, source: &Bytes, locals: &mut Locals)
                             .or_default()
                             .push(Definition { name: range, scope });
 
-                        state = Start;
+                        state = State::Start;
                         scope = new_scope;
                     }
                     _ => {}
                 }
+            }
+            DECLARATION_KIND | PARAMETER_DECLARATION_KIND => {
+                state = State::VarDef;
             }
             FUNCTION_DEFINITION_KIND => {
                 state = State::FnDef { new_scope: range };

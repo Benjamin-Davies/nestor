@@ -38,12 +38,15 @@ pub fn parse(source: &[u8]) -> anyhow::Result<Tree> {
 
 const IDENTIFIER_KIND: u16 = 1;
 const FUNCTION_DEFINITION_KIND: u16 = 196;
+const DECLARATION_KIND: u16 = 198;
 const FUNCTION_DECLARATOR_KIND: u16 = 230;
+const PARAMETER_DECLARATION_KIND: u16 = 260;
 
 #[cfg(test)]
 mod tests {
     use crate::analyze::{
-        FUNCTION_DECLARATOR_KIND, FUNCTION_DEFINITION_KIND, IDENTIFIER_KIND, language,
+        DECLARATION_KIND, FUNCTION_DECLARATOR_KIND, FUNCTION_DEFINITION_KIND, IDENTIFIER_KIND,
+        PARAMETER_DECLARATION_KIND, language,
     };
 
     #[test]
@@ -54,9 +57,14 @@ mod tests {
             FUNCTION_DEFINITION_KIND,
             l.id_for_node_kind("function_definition", true)
         );
+        assert_eq!(DECLARATION_KIND, l.id_for_node_kind("declaration", true));
         assert_eq!(
             FUNCTION_DECLARATOR_KIND,
             l.id_for_node_kind("function_declarator", true)
+        );
+        assert_eq!(
+            PARAMETER_DECLARATION_KIND,
+            l.id_for_node_kind("parameter_declaration", true)
         );
     }
 }
