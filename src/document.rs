@@ -47,12 +47,32 @@ impl Document {
         }
     }
 
-    pub fn find_references(&self, ident: tree_sitter::Node) -> Vec<Range> {
-        let ident_bytes = self.source.slice(ident.byte_range());
+    /// Returns the locations of the references we found and a boolean
+    /// to indicate if the symbol is a local variable.
+    pub fn find_references(&self, ident: tree_sitter::Node) -> (Vec<Range>, bool) {
+        let ident = Ident {
+            bytes: self.source.slice(ident.byte_range()),
+            range: ident.range().into(),
+        };
 
-        let symbols = self.locals.symbols.get(&ident_bytes);
+        let symbols = self.locals.symbols.get(&ident.bytes);
 
-        symbols.cloned().unwrap_or_default()
+        let mut definitions = self.locals.definitions(ident);
+        definitions.retain(|d| !d.is_function);
+        if !definitions.is_empty() {
+            // If there are local vars that match, assume that the user wants
+            // references to those vars.
+            let matches = symbols
+                .into_iter()
+                .flatten()
+                .copied()
+                .filter(|&s| definitions.iter().any(|d| d.scope.contains(s)))
+                .collect();
+            (matches, true)
+        } else {
+            let matches = symbols.cloned().unwrap_or_default();
+            (matches, false)
+        }
     }
 
     pub fn find_definitions(&self, ident: tree_sitter::Node) -> Vec<Range> {

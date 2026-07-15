@@ -38,7 +38,8 @@ fn test_analyze_function_definition() {
             .unwrap(),
         &[Definition {
             name: "129:15-129:36".parse().unwrap(),
-            scope: "1:0-11601:0".parse().unwrap()
+            scope: "1:0-11601:0".parse().unwrap(),
+            is_function: true,
         }]
     );
 }

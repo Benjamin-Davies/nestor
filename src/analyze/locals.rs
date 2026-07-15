@@ -19,6 +19,7 @@ pub struct Locals {
 pub struct Definition {
     pub name: Range,
     pub scope: Range,
+    pub is_function: bool,
 }
 
 pub fn analyze(node: tree_sitter::Node, source: &Bytes) -> Locals {
@@ -75,7 +76,11 @@ fn collect_symbols(root: tree_sitter::Node, source: &Bytes, locals: &mut Locals)
                             .definitions
                             .entry(name)
                             .or_default()
-                            .push(Definition { name: range, scope });
+                            .push(Definition {
+                                name: range,
+                                scope,
+                                is_function: false,
+                            });
 
                         state = State::Start;
                     }
@@ -84,7 +89,11 @@ fn collect_symbols(root: tree_sitter::Node, source: &Bytes, locals: &mut Locals)
                             .definitions
                             .entry(name)
                             .or_default()
-                            .push(Definition { name: range, scope });
+                            .push(Definition {
+                                name: range,
+                                scope,
+                                is_function: true,
+                            });
 
                         state = State::Start;
                         scope = new_scope;

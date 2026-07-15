@@ -218,7 +218,7 @@ impl Server {
             .ident_at(position.into())
             .context("No ident at cursor")?;
 
-        let references = document.find_references(ident);
+        let (references, is_local) = document.find_references(ident);
         let mut locations = references
             .into_iter()
             .map(|range| Location {
@@ -226,6 +226,10 @@ impl Server {
                 range: range.into(),
             })
             .collect_vec();
+
+        if is_local {
+            return Ok(locations);
+        }
 
         let global_references = self
             .globals_store
