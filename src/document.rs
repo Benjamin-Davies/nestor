@@ -2,7 +2,7 @@ use bytes::Bytes;
 use lsp_types::TextDocumentItem;
 
 use crate::analyze::{
-    locals, parse,
+    IDENTIFIER_KIND, TYPE_IDENTIFIER_KIND, locals, parse,
     types::{Ident, Point, Range},
 };
 
@@ -39,8 +39,7 @@ impl Document {
             .root_node()
             .descendant_for_point_range(ts_point, ts_point)?;
 
-        // TODO: numeric ID?
-        if node.kind() == "identifier" {
+        if let IDENTIFIER_KIND | TYPE_IDENTIFIER_KIND = node.kind_id() {
             Some(node)
         } else {
             None

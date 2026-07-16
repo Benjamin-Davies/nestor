@@ -24,7 +24,7 @@ pub struct Point {
 
 impl Ident {
     pub fn from_node(node: Node, source: &Bytes) -> Ident {
-        debug_assert_eq!(node.kind(), "identifier");
+        debug_assert!(matches!(node.kind(), "identifier" | "type_identifier"));
 
         Ident {
             bytes: source.slice(node.byte_range()),

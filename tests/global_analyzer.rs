@@ -19,6 +19,8 @@ fn test_analyze() {
             .any(|n| &*n.bytes == b"sqlite3BeginBenignMalloc")
     );
 
+    assert_eq!(globals.type_symbols.len(), 991);
+
     assert_eq!(globals.definitions.len(), 83);
     let definitions = globals
         .definitions
@@ -35,4 +37,6 @@ fn test_analyze() {
     assert!(!definitions.contains("zMagicHeader"));
     // local var
     assert!(!definitions.contains("zMsg"));
+
+    assert_eq!(globals.type_definitions.len(), 6);
 }

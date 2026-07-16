@@ -10,11 +10,20 @@ use crate::analyze::{language, types::Ident};
 #[derive(Debug, Default)]
 pub struct Globals {
     pub symbols: Vec<Ident>,
+    pub type_symbols: Vec<Ident>,
     pub definitions: Vec<Ident>,
+    pub type_definitions: Vec<Ident>,
 }
 
 pub fn ident_query() -> &'static Query {
     const SOURCE: &str = "(identifier) @ident";
+
+    static QUERY: OnceLock<Query> = OnceLock::new();
+    QUERY.get_or_init(|| Query::new(language(), SOURCE).expect("error parsing query"))
+}
+
+pub fn type_ident_query() -> &'static Query {
+    const SOURCE: &str = "(type_identifier) @ident";
 
     static QUERY: OnceLock<Query> = OnceLock::new();
     QUERY.get_or_init(|| Query::new(language(), SOURCE).expect("error parsing query"))
@@ -55,6 +64,28 @@ pub fn var_decl_query() -> &'static Query {
     QUERY.get_or_init(|| Query::new(language(), SOURCE).expect("error parsing query"))
 }
 
+pub fn type_def_query() -> &'static Query {
+    const SOURCE: &str = "
+        [
+            (type_definition
+                declarator: (type_identifier) @ident)
+            (pointer_declarator
+                declarator: (type_identifier) @ident)
+            (array_declarator
+                declarator: (type_identifier) @ident)
+            (struct_specifier
+                name: (type_identifier) @ident)
+            (union_specifier
+                name: (type_identifier) @ident)
+            (enum_specifier
+                name: (type_identifier) @ident)
+        ]
+    ";
+
+    static QUERY: OnceLock<Query> = OnceLock::new();
+    QUERY.get_or_init(|| Query::new(language(), SOURCE).expect("error parsing query"))
+}
+
 pub fn analyze<'a>(node: Node, source: Bytes) -> Globals {
     let mut globals = Globals::default();
 
@@ -69,6 +100,20 @@ pub fn analyze<'a>(node: Node, source: Bytes) -> Globals {
 
             let ident = Ident::from_node(node, &source);
             globals.symbols.push(ident);
+        }
+    }
+
+    let mut cursor = QueryCursor::new();
+    let mut matches = cursor.matches(type_ident_query(), node, &*source);
+    while let Some(m) = matches.next() {
+        for capture in m.captures {
+            let node = capture.node;
+            if node.byte_range().is_empty() {
+                continue;
+            }
+
+            let ident = Ident::from_node(node, &source);
+            globals.type_symbols.push(ident);
         }
     }
 
@@ -123,6 +168,20 @@ pub fn analyze<'a>(node: Node, source: Bytes) -> Globals {
                 }
                 kind => unreachable!("{kind}"),
             }
+        }
+    }
+
+    let mut cursor = QueryCursor::new();
+    let mut matches = cursor.matches(type_def_query(), node, &*source);
+    while let Some(m) = matches.next() {
+        for capture in m.captures {
+            let node = capture.node;
+            if node.byte_range().is_empty() {
+                continue;
+            }
+
+            let ident = Ident::from_node(node, &source);
+            globals.type_definitions.push(ident);
         }
     }
 

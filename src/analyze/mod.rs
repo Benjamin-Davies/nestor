@@ -36,17 +36,18 @@ pub fn parse(source: &[u8]) -> anyhow::Result<Tree> {
     })
 }
 
-const IDENTIFIER_KIND: u16 = 1;
-const FUNCTION_DEFINITION_KIND: u16 = 196;
-const DECLARATION_KIND: u16 = 198;
-const FUNCTION_DECLARATOR_KIND: u16 = 230;
-const PARAMETER_DECLARATION_KIND: u16 = 260;
+pub const IDENTIFIER_KIND: u16 = 1;
+pub const FUNCTION_DEFINITION_KIND: u16 = 196;
+pub const DECLARATION_KIND: u16 = 198;
+pub const FUNCTION_DECLARATOR_KIND: u16 = 230;
+pub const PARAMETER_DECLARATION_KIND: u16 = 260;
+pub const TYPE_IDENTIFIER_KIND: u16 = 362;
 
 #[cfg(test)]
 mod tests {
     use crate::analyze::{
         DECLARATION_KIND, FUNCTION_DECLARATOR_KIND, FUNCTION_DEFINITION_KIND, IDENTIFIER_KIND,
-        PARAMETER_DECLARATION_KIND, language,
+        PARAMETER_DECLARATION_KIND, TYPE_IDENTIFIER_KIND, language,
     };
 
     #[test]
@@ -65,6 +66,10 @@ mod tests {
         assert_eq!(
             PARAMETER_DECLARATION_KIND,
             l.id_for_node_kind("parameter_declaration", true)
+        );
+        assert_eq!(
+            TYPE_IDENTIFIER_KIND,
+            l.id_for_node_kind("type_identifier", true)
         );
     }
 }

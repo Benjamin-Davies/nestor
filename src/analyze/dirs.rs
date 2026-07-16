@@ -12,6 +12,7 @@ pub struct Symbol {
     pub path: Arc<Path>,
     pub range: Range,
     pub is_definition: bool,
+    pub is_type: bool,
 }
 
 /// Returns the number of definitions found
@@ -78,6 +79,7 @@ fn analyze_file(path: &Path) -> anyhow::Result<Vec<Symbol>> {
             path: path.clone(),
             range: ident.range,
             is_definition: true,
+            is_type: false,
         });
     }
     for ident in globals.symbols {
@@ -86,6 +88,25 @@ fn analyze_file(path: &Path) -> anyhow::Result<Vec<Symbol>> {
             path: path.clone(),
             range: ident.range,
             is_definition: false,
+            is_type: false,
+        });
+    }
+    for ident in globals.type_definitions {
+        symbols.push(Symbol {
+            name: ident.bytes,
+            path: path.clone(),
+            range: ident.range,
+            is_definition: true,
+            is_type: true,
+        });
+    }
+    for ident in globals.type_symbols {
+        symbols.push(Symbol {
+            name: ident.bytes,
+            path: path.clone(),
+            range: ident.range,
+            is_definition: false,
+            is_type: true,
         });
     }
 
@@ -141,6 +162,7 @@ mod tests {
                 path: Path::new("").into(),
                 range: Default::default(),
                 is_definition: Default::default(),
+                is_type: Default::default(),
             })
             .collect_vec();
 
@@ -161,6 +183,7 @@ mod tests {
                 path: Path::new("").into(),
                 range: Default::default(),
                 is_definition: Default::default(),
+                is_type: Default::default(),
             })
             .collect_vec();
 
