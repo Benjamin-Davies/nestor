@@ -17,3 +17,9 @@ Nestor is named after the [Kea](https://en.wikipedia.org/wiki/Kea) (*Nestor Nota
 * Preprocessor handling beyond goto definition for macros
 * Full unicode support (will probably work to some extent, but there will likely be normalisation and potential perf issues)
 * Support for text encodings other than UTF-8
+
+## Usage
+
+This project is very much a work-in-progress. To use it, build the `nestor` binary using Cargo then configure your editor to use it as a stdio language server.
+
+* For Zed: https://github.com/zed-industries/zed/discussions/24092#discussioncomment-15278796
