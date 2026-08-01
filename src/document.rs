@@ -3,7 +3,7 @@ use lsp_types::TextDocumentItem;
 
 use crate::analyze::{
     IDENTIFIER_KIND, TYPE_IDENTIFIER_KIND, locals, parse,
-    types::{Ident, Point, Range},
+    types::{Ident, Point, Range, SymbolKind},
 };
 
 pub struct Document {
@@ -57,7 +57,7 @@ impl Document {
         let symbols = self.locals.symbols.get(&ident.bytes);
 
         let mut definitions = self.locals.definitions(ident);
-        definitions.retain(|d| !d.is_function);
+        definitions.retain(|d| d.kind != SymbolKind::Function);
         if !definitions.is_empty() {
             // If there are local vars that match, assume that the user wants
             // references to those vars.
@@ -89,11 +89,14 @@ impl Document {
         &self.source[node.byte_range()]
     }
 
-    pub fn completions(&self, point: Point) -> impl Iterator<Item = &Bytes> {
+    pub fn completions(&self, point: Point) -> impl Iterator<Item = (&[u8], SymbolKind)> {
         self.locals
             .definitions
             .iter()
-            .filter(move |(_name, defs)| defs.iter().any(|def| def.scope.contains_point(point)))
-            .map(|(name, _defs)| name)
+            .flat_map(move |(name, defs)| {
+                defs.iter()
+                    .filter(move |def| def.scope.contains_point(point))
+                    .map(|def| (name as &[_], def.kind))
+            })
     }
 }

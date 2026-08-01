@@ -22,6 +22,18 @@ pub struct Point {
     pub column: u32,
 }
 
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum SymbolKind {
+    #[default]
+    Unknown,
+    Variable,
+    Function,
+    Type,
+    Macro,
+    /// These are never actually stored, just used for completions.
+    Keyword,
+}
+
 impl Ident {
     pub fn from_node(node: Node, source: &Bytes) -> Ident {
         debug_assert!(matches!(node.kind(), "identifier" | "type_identifier"));
@@ -44,6 +56,19 @@ impl Range {
 
     pub fn contains_point(&self, point: Point) -> bool {
         self.start <= point && point <= self.end
+    }
+}
+
+impl SymbolKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            SymbolKind::Unknown => "??",
+            SymbolKind::Variable => "variable",
+            SymbolKind::Function => "function",
+            SymbolKind::Type => "type",
+            SymbolKind::Macro => "macro",
+            SymbolKind::Keyword => "keyword",
+        }
     }
 }
 
@@ -97,6 +122,20 @@ impl From<Point> for lsp_types::Position {
         lsp_types::Position {
             line: value.row,
             character: value.column,
+        }
+    }
+}
+
+impl From<SymbolKind> for Option<lsp_types::CompletionItemKind> {
+    fn from(value: SymbolKind) -> Self {
+        use lsp_types::CompletionItemKind as K;
+        match value {
+            SymbolKind::Unknown => None,
+            SymbolKind::Variable => Some(K::VARIABLE),
+            SymbolKind::Function => Some(K::FUNCTION),
+            SymbolKind::Type => Some(K::CLASS),
+            SymbolKind::Macro => Some(K::CONSTANT),
+            SymbolKind::Keyword => Some(K::KEYWORD),
         }
     }
 }
@@ -158,6 +197,12 @@ impl FromStr for Point {
             row: row.parse::<u32>()?.saturating_sub(1),
             column: column.parse::<u32>()?,
         })
+    }
+}
+
+impl fmt::Display for SymbolKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(self.as_str())
     }
 }
 

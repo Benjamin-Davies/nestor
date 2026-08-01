@@ -5,14 +5,17 @@ use clap::{crate_name, crate_version};
 use itertools::Itertools;
 use lsp_server::Message;
 use lsp_types::{
-    CompletionItem, CompletionList, CompletionParams, DidChangeWorkspaceFoldersParams,
-    DidCloseTextDocumentParams, DidOpenTextDocumentParams, GotoDefinitionParams, Location,
-    Position, PositionEncodingKind, ReferenceParams, TextDocumentIdentifier, TextDocumentItem,
-    TextDocumentPositionParams, Uri,
+    CompletionItem, CompletionItemLabelDetails, CompletionList, CompletionParams,
+    DidChangeWorkspaceFoldersParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
+    GotoDefinitionParams, Location, Position, PositionEncodingKind, ReferenceParams,
+    TextDocumentIdentifier, TextDocumentItem, TextDocumentPositionParams, Uri,
 };
 
 use crate::{
-    analyze::types::Point,
+    analyze::{
+        KEYWORDS,
+        types::{Point, SymbolKind},
+    },
     document::Document,
     globals::GlobalsStore,
     messages::{Notification, Request, Response},
@@ -78,7 +81,12 @@ fn server_capabilities() -> lsp_types::ServerCapabilities {
         )),
         definition_provider: Some(lsp_types::OneOf::Left(true)),
         references_provider: Some(lsp_types::OneOf::Left(true)),
-        completion_provider: Some(Default::default()),
+        completion_provider: Some(lsp_types::CompletionOptions {
+            completion_item: Some(lsp_types::CompletionOptionsCompletionItem {
+                label_details_support: Some(true),
+            }),
+            ..Default::default()
+        }),
         ..Default::default()
     }
 }
@@ -276,11 +284,22 @@ impl Server {
     fn complete(&self, uri: &Uri, position: Position) -> anyhow::Result<CompletionList> {
         let document = self.documents.get(uri).context("No such open document")?;
 
-        let completions = document.completions(position.into());
+        let local_completions = document.completions(position.into());
 
-        let items = completions
-            .map(|symbol| CompletionItem {
+        let keyword_completions = KEYWORDS
+            .iter()
+            .map(|keyword| (keyword.as_bytes(), SymbolKind::Keyword));
+
+        let items = local_completions
+            .chain(keyword_completions)
+            .map(|(symbol, kind)| CompletionItem {
                 label: String::from_utf8_lossy(symbol).into(),
+                label_details: Some(CompletionItemLabelDetails {
+                    detail: Some(kind.to_string()),
+                    description: None,
+                }),
+                detail: Some(kind.to_string()),
+                kind: kind.into(),
                 ..Default::default()
             })
             .collect_vec();

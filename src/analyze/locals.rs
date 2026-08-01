@@ -6,7 +6,7 @@ use itertools::Itertools;
 use crate::analyze::{
     DECLARATION_KIND, FUNCTION_DECLARATOR_KIND, FUNCTION_DEFINITION_KIND, IDENTIFIER_KIND,
     PARAMETER_DECLARATION_KIND,
-    types::{Ident, Range},
+    types::{Ident, Range, SymbolKind},
 };
 
 #[derive(Debug, Default)]
@@ -19,7 +19,7 @@ pub struct Locals {
 pub struct Definition {
     pub name: Range,
     pub scope: Range,
-    pub is_function: bool,
+    pub kind: SymbolKind,
 }
 
 pub fn analyze(node: tree_sitter::Node, source: &Bytes) -> Locals {
@@ -79,7 +79,7 @@ fn collect_symbols(root: tree_sitter::Node, source: &Bytes, locals: &mut Locals)
                             .push(Definition {
                                 name: range,
                                 scope,
-                                is_function: false,
+                                kind: SymbolKind::Variable,
                             });
 
                         state = State::Start;
@@ -92,7 +92,7 @@ fn collect_symbols(root: tree_sitter::Node, source: &Bytes, locals: &mut Locals)
                             .push(Definition {
                                 name: range,
                                 scope,
-                                is_function: true,
+                                kind: SymbolKind::Function,
                             });
 
                         state = State::Start;
