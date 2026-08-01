@@ -5,12 +5,14 @@ use clap::{crate_name, crate_version};
 use itertools::Itertools;
 use lsp_server::Message;
 use lsp_types::{
-    DidChangeWorkspaceFoldersParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
-    GotoDefinitionParams, Location, Position, PositionEncodingKind, ReferenceParams,
-    TextDocumentIdentifier, TextDocumentItem, TextDocumentPositionParams, Uri,
+    CompletionItem, CompletionList, CompletionParams, DidChangeWorkspaceFoldersParams,
+    DidCloseTextDocumentParams, DidOpenTextDocumentParams, GotoDefinitionParams, Location,
+    Position, PositionEncodingKind, ReferenceParams, TextDocumentIdentifier, TextDocumentItem,
+    TextDocumentPositionParams, Uri,
 };
 
 use crate::{
+    analyze::types::Point,
     document::Document,
     globals::GlobalsStore,
     messages::{Notification, Request, Response},
@@ -76,6 +78,7 @@ fn server_capabilities() -> lsp_types::ServerCapabilities {
         )),
         definition_provider: Some(lsp_types::OneOf::Left(true)),
         references_provider: Some(lsp_types::OneOf::Left(true)),
+        completion_provider: Some(Default::default()),
         ..Default::default()
     }
 }
@@ -97,7 +100,11 @@ impl Server {
                     ..
                 },
             ) => {
-                tracing::info!("Go to definition {} {position:?}", uri.as_str());
+                tracing::info!(
+                    "Go to definition {} {}",
+                    uri.as_str(),
+                    Point::from(position)
+                );
 
                 let locations = self.find_definitions(&uri, position)?;
 
@@ -116,13 +123,32 @@ impl Server {
                     ..
                 },
             ) => {
-                tracing::info!("Find references {} {position:?}", uri.as_str());
+                tracing::info!("Find references {} {}", uri.as_str(), Point::from(position));
 
                 let locations = self.find_references(&uri, position)?;
 
                 self.connection
                     .sender
                     .send(Response::Locations(id, locations).into())?;
+            }
+            Request::Completion(
+                id,
+                CompletionParams {
+                    text_document_position:
+                        TextDocumentPositionParams {
+                            text_document: TextDocumentIdentifier { uri },
+                            position,
+                        },
+                    ..
+                },
+            ) => {
+                tracing::info!("Complete {} {}", uri.as_str(), Point::from(position));
+
+                let list = self.complete(&uri, position)?;
+
+                self.connection
+                    .sender
+                    .send(Response::CompletionList(id, list).into())?;
             }
         }
 
@@ -245,5 +271,23 @@ impl Server {
         );
 
         Ok(locations)
+    }
+
+    fn complete(&self, uri: &Uri, position: Position) -> anyhow::Result<CompletionList> {
+        let document = self.documents.get(uri).context("No such open document")?;
+
+        let completions = document.completions(position.into());
+
+        let items = completions
+            .map(|symbol| CompletionItem {
+                label: String::from_utf8_lossy(symbol).into(),
+                ..Default::default()
+            })
+            .collect_vec();
+
+        Ok(CompletionList {
+            is_incomplete: false,
+            items,
+        })
     }
 }

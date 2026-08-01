@@ -1,5 +1,4 @@
 use std::{
-    cmp::Ordering,
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
 };
@@ -10,7 +9,10 @@ use crossbeam_channel::{Receiver, Sender, unbounded};
 use itertools::Itertools;
 use lsp_types::{Uri, WorkspaceFolder};
 
-use crate::analyze::{dirs, types::Range};
+use crate::{
+    analyze::{dirs, types::Range},
+    utils::binary_search_range_by_key,
+};
 
 const GIT_DIR_NAME: &str = ".git";
 
@@ -168,22 +170,9 @@ impl GlobalsStore {
 
 impl RootData {
     fn find_symbol(&self, name: &[u8]) -> &[dirs::Symbol] {
-        let start = self
-            .symbols
-            .binary_search_by(|symbol| match <[u8]>::cmp(&symbol.name, name) {
-                Ordering::Less => Ordering::Less,
-                Ordering::Greater | Ordering::Equal => Ordering::Greater,
-            })
-            .expect_err("closure should never return eq");
-        let end = self
-            .symbols
-            .binary_search_by(|symbol| match <[u8]>::cmp(&symbol.name, name) {
-                Ordering::Less | Ordering::Equal => Ordering::Less,
-                Ordering::Greater => Ordering::Greater,
-            })
-            .expect_err("closure should never return eq");
+        let range = binary_search_range_by_key(&self.symbols, &name, |symbol| &symbol.name);
 
-        &self.symbols[start..end]
+        &self.symbols[range]
     }
 }
 

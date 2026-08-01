@@ -41,6 +41,10 @@ impl Range {
     pub fn contains(self, other: Self) -> bool {
         self.start <= other.start && other.end <= self.end
     }
+
+    pub fn contains_point(&self, point: Point) -> bool {
+        self.start <= point && point <= self.end
+    }
 }
 
 impl From<tree_sitter::Range> for Range {

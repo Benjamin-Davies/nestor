@@ -88,4 +88,12 @@ impl Document {
     pub fn bytes_for<'a>(&'a self, node: tree_sitter::Node) -> &'a [u8] {
         &self.source[node.byte_range()]
     }
+
+    pub fn completions(&self, point: Point) -> impl Iterator<Item = &Bytes> {
+        self.locals
+            .definitions
+            .iter()
+            .filter(move |(_name, defs)| defs.iter().any(|def| def.scope.contains_point(point)))
+            .map(|(name, _defs)| name)
+    }
 }
