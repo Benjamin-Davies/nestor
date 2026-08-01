@@ -5,7 +5,9 @@ use std::sync::OnceLock;
 use bytes::Bytes;
 use tree_sitter::{Node, Query, QueryCursor, StreamingIterator};
 
-use crate::analyze::{language, types::Ident};
+use crate::analyze::{IDENTIFIER_KIND, STORAGE_CLASS_SPECIFIER_KIND, language, types::Ident};
+
+use super::types::SymbolKind;
 
 #[derive(Debug, Default)]
 pub struct Globals {
@@ -112,7 +114,7 @@ pub fn analyze<'a>(node: Node, source: Bytes) -> Globals {
                 continue;
             }
 
-            let ident = Ident::from_node(node, &source);
+            let ident = Ident::from_node(node, &source).with_kind(SymbolKind::Type);
             globals.type_symbols.push(ident);
         }
     }
@@ -122,19 +124,19 @@ pub fn analyze<'a>(node: Node, source: Bytes) -> Globals {
     while let Some(m) = matches.next() {
         'captures: for capture in m.captures {
             let node = capture.node;
-            match node.kind() {
-                "storage_class_specifier" => {
+            match node.kind_id() {
+                STORAGE_CLASS_SPECIFIER_KIND => {
                     let bytes = &source[node.byte_range()];
                     if bytes == b"static" {
                         break 'captures;
                     }
                 }
-                "identifier" => {
+                IDENTIFIER_KIND => {
                     if node.byte_range().is_empty() {
                         continue;
                     }
 
-                    let ident = Ident::from_node(node, &source);
+                    let ident = Ident::from_node(node, &source).with_kind(SymbolKind::Function);
                     globals.definitions.push(ident);
                 }
                 kind => unreachable!("{kind}"),
@@ -151,19 +153,19 @@ pub fn analyze<'a>(node: Node, source: Bytes) -> Globals {
                 break 'captures;
             }
 
-            match node.kind() {
-                "storage_class_specifier" => {
+            match node.kind_id() {
+                STORAGE_CLASS_SPECIFIER_KIND => {
                     let bytes = &source[node.byte_range()];
                     if bytes == b"static" {
                         break 'captures;
                     }
                 }
-                "identifier" => {
+                IDENTIFIER_KIND => {
                     if node.byte_range().is_empty() {
                         continue;
                     }
 
-                    let ident = Ident::from_node(node, &source);
+                    let ident = Ident::from_node(node, &source).with_kind(SymbolKind::Variable);
                     globals.definitions.push(ident);
                 }
                 kind => unreachable!("{kind}"),
@@ -180,7 +182,7 @@ pub fn analyze<'a>(node: Node, source: Bytes) -> Globals {
                 continue;
             }
 
-            let ident = Ident::from_node(node, &source);
+            let ident = Ident::from_node(node, &source).with_kind(SymbolKind::Type);
             globals.type_definitions.push(ident);
         }
     }

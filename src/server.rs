@@ -286,14 +286,21 @@ impl Server {
 
         let local_completions = document.completions(position.into());
 
+        let global_definitions = self.globals_store.all_definitions();
+        let global_completions = global_definitions
+            .iter()
+            .map(|symbol| (&symbol.name as &[_], symbol.kind));
+
         let keyword_completions = KEYWORDS
             .iter()
             .map(|keyword| (keyword.as_bytes(), SymbolKind::Keyword));
 
         let items = local_completions
+            .into_iter()
+            .chain(global_completions)
             .chain(keyword_completions)
-            .map(|(symbol, kind)| CompletionItem {
-                label: String::from_utf8_lossy(symbol).into(),
+            .map(|(name, kind)| CompletionItem {
+                label: String::from_utf8_lossy(name).into(),
                 label_details: Some(CompletionItemLabelDetails {
                     detail: Some(kind.to_string()),
                     description: None,

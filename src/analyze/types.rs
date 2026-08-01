@@ -4,10 +4,13 @@ use anyhow::Context;
 use bytes::Bytes;
 use tree_sitter::Node;
 
+use crate::analyze::{IDENTIFIER_KIND, TYPE_IDENTIFIER_KIND};
+
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Ident {
     pub bytes: Bytes,
     pub range: Range,
+    pub kind: SymbolKind,
 }
 
 #[derive(Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -36,12 +39,22 @@ pub enum SymbolKind {
 
 impl Ident {
     pub fn from_node(node: Node, source: &Bytes) -> Ident {
-        debug_assert!(matches!(node.kind(), "identifier" | "type_identifier"));
+        let ts_kind = node.kind_id();
+        debug_assert!(matches!(ts_kind, IDENTIFIER_KIND | TYPE_IDENTIFIER_KIND));
 
         Ident {
             bytes: source.slice(node.byte_range()),
             range: node.range().into(),
+            kind: if ts_kind == TYPE_IDENTIFIER_KIND {
+                SymbolKind::Type
+            } else {
+                SymbolKind::Unknown
+            },
         }
+    }
+
+    pub fn with_kind(self, kind: SymbolKind) -> Self {
+        Self { kind, ..self }
     }
 
     pub fn to_str(&self) -> Cow<'_, str> {
@@ -142,7 +155,7 @@ impl From<SymbolKind> for Option<lsp_types::CompletionItemKind> {
 
 impl fmt::Debug for Ident {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?} ({})", self.to_str(), self.range)
+        write!(f, "{:?}: {} ({})", self.to_str(), self.kind, self.range)
     }
 }
 

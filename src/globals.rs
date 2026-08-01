@@ -10,7 +10,10 @@ use itertools::Itertools;
 use lsp_types::{Uri, WorkspaceFolder};
 
 use crate::{
-    analyze::{dirs, types::Range},
+    analyze::{
+        dirs,
+        types::{Range, SymbolKind},
+    },
     utils::binary_search_range_by_key,
 };
 
@@ -26,6 +29,7 @@ pub struct Symbol {
     pub name: Bytes,
     pub uri: Uri,
     pub range: Range,
+    pub kind: SymbolKind,
 }
 
 /// The entire workspace isn't loaded into memory all at once. Instead, when a
@@ -166,6 +170,25 @@ impl GlobalsStore {
 
         symbols
     }
+
+    pub fn all_definitions(&self) -> Vec<Symbol> {
+        let mut symbols = Vec::new();
+        for root in &self.roots {
+            let root_data = root.data.lock().expect("failed to lock root data");
+            let root_symbols = root_data
+                .symbols
+                .iter()
+                .filter(|s| s.is_definition)
+                .filter_map(|s| {
+                    s.try_into()
+                        .inspect_err(|err| tracing::warn!("Error finding symbol: {err}"))
+                        .ok()
+                });
+            symbols.extend(root_symbols);
+        }
+
+        symbols
+    }
 }
 
 impl RootData {
@@ -184,6 +207,7 @@ impl TryFrom<&dirs::Symbol> for Symbol {
             name: symbol.name.clone(),
             uri: path_to_file_uri(&symbol.path).context("failed to convert path to file uri")?,
             range: symbol.range,
+            kind: symbol.kind,
         })
     }
 }

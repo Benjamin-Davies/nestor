@@ -37,6 +37,7 @@ pub fn parse(source: &[u8]) -> anyhow::Result<Tree> {
 }
 
 pub const IDENTIFIER_KIND: u16 = 1;
+pub const STORAGE_CLASS_SPECIFIER_KIND: u16 = 242;
 pub const FUNCTION_DEFINITION_KIND: u16 = 196;
 pub const DECLARATION_KIND: u16 = 198;
 pub const FUNCTION_DECLARATOR_KIND: u16 = 230;
@@ -95,13 +96,17 @@ pub const KEYWORDS: &[&str] = &[
 mod tests {
     use crate::analyze::{
         DECLARATION_KIND, FUNCTION_DECLARATOR_KIND, FUNCTION_DEFINITION_KIND, IDENTIFIER_KIND,
-        PARAMETER_DECLARATION_KIND, TYPE_IDENTIFIER_KIND, language,
+        PARAMETER_DECLARATION_KIND, STORAGE_CLASS_SPECIFIER_KIND, TYPE_IDENTIFIER_KIND, language,
     };
 
     #[test]
     fn kind_ids() {
         let l = language();
         assert_eq!(IDENTIFIER_KIND, l.id_for_node_kind("identifier", true));
+        assert_eq!(
+            STORAGE_CLASS_SPECIFIER_KIND,
+            l.id_for_node_kind("storage_class_specifier", true)
+        );
         assert_eq!(
             FUNCTION_DEFINITION_KIND,
             l.id_for_node_kind("function_definition", true)

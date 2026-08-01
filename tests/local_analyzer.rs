@@ -2,6 +2,7 @@ use bytes::Bytes;
 use nestor::analyze::{
     locals::{self, Definition},
     parse,
+    types::SymbolKind,
 };
 
 const BTREE_C: &[u8] = include_bytes!("btree.c");
@@ -39,7 +40,7 @@ fn test_analyze_function_definition() {
         &[Definition {
             name: "129:15-129:36".parse().unwrap(),
             scope: "1:0-11601:0".parse().unwrap(),
-            is_function: true,
+            kind: SymbolKind::Function
         }]
     );
 }

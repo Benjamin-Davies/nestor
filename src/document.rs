@@ -1,4 +1,5 @@
 use bytes::Bytes;
+use itertools::Itertools;
 use lsp_types::TextDocumentItem;
 
 use crate::analyze::{
@@ -49,10 +50,7 @@ impl Document {
     /// Returns the locations of the references we found and a boolean
     /// to indicate if the symbol is a local variable.
     pub fn find_references(&self, ident: tree_sitter::Node) -> (Vec<Range>, bool) {
-        let ident = Ident {
-            bytes: self.source.slice(ident.byte_range()),
-            range: ident.range().into(),
-        };
+        let ident = Ident::from_node(ident, &self.source);
 
         let symbols = self.locals.symbols.get(&ident.bytes);
 
@@ -75,10 +73,7 @@ impl Document {
     }
 
     pub fn find_definitions(&self, ident: tree_sitter::Node) -> Vec<Range> {
-        let ident = Ident {
-            bytes: self.source.slice(ident.byte_range()),
-            range: ident.range().into(),
-        };
+        let ident = Ident::from_node(ident, &self.source);
 
         let definitions = self.locals.definitions(ident);
 
@@ -89,7 +84,7 @@ impl Document {
         &self.source[node.byte_range()]
     }
 
-    pub fn completions(&self, point: Point) -> impl Iterator<Item = (&[u8], SymbolKind)> {
+    pub fn completions(&self, point: Point) -> Vec<(&[u8], SymbolKind)> {
         self.locals
             .definitions
             .iter()
@@ -98,5 +93,6 @@ impl Document {
                     .filter(move |def| def.scope.contains_point(point))
                     .map(|def| (name as &[_], def.kind))
             })
+            .collect_vec()
     }
 }

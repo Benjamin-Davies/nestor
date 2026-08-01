@@ -4,7 +4,10 @@ use bytes::{Buf, BufMut, Bytes, BytesMut};
 use crossbeam_channel::{Sender, unbounded};
 use itertools::Itertools;
 
-use crate::analyze::{globals, parse, types::Range};
+use crate::analyze::{
+    globals, parse,
+    types::{Range, SymbolKind},
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Symbol {
@@ -12,7 +15,7 @@ pub struct Symbol {
     pub path: Arc<Path>,
     pub range: Range,
     pub is_definition: bool,
-    pub is_type: bool,
+    pub kind: SymbolKind,
 }
 
 /// Returns the number of definitions found
@@ -79,7 +82,7 @@ fn analyze_file(path: &Path) -> anyhow::Result<Vec<Symbol>> {
             path: path.clone(),
             range: ident.range,
             is_definition: true,
-            is_type: false,
+            kind: ident.kind,
         });
     }
     for ident in globals.symbols {
@@ -88,7 +91,7 @@ fn analyze_file(path: &Path) -> anyhow::Result<Vec<Symbol>> {
             path: path.clone(),
             range: ident.range,
             is_definition: false,
-            is_type: false,
+            kind: ident.kind,
         });
     }
     for ident in globals.type_definitions {
@@ -97,7 +100,7 @@ fn analyze_file(path: &Path) -> anyhow::Result<Vec<Symbol>> {
             path: path.clone(),
             range: ident.range,
             is_definition: true,
-            is_type: true,
+            kind: ident.kind,
         });
     }
     for ident in globals.type_symbols {
@@ -106,7 +109,7 @@ fn analyze_file(path: &Path) -> anyhow::Result<Vec<Symbol>> {
             path: path.clone(),
             range: ident.range,
             is_definition: false,
-            is_type: true,
+            kind: ident.kind,
         });
     }
 
@@ -162,7 +165,7 @@ mod tests {
                 path: Path::new("").into(),
                 range: Default::default(),
                 is_definition: Default::default(),
-                is_type: Default::default(),
+                kind: Default::default(),
             })
             .collect_vec();
 
@@ -183,7 +186,7 @@ mod tests {
                 path: Path::new("").into(),
                 range: Default::default(),
                 is_definition: Default::default(),
-                is_type: Default::default(),
+                kind: Default::default(),
             })
             .collect_vec();
 
