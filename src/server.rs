@@ -289,6 +289,7 @@ impl Server {
         let global_definitions = self.globals_store.all_definitions();
         let global_completions = global_definitions
             .iter()
+            .filter(|s| &s.uri != uri)
             .map(|symbol| (&symbol.name as &[_], symbol.kind));
 
         let keyword_completions = KEYWORDS
