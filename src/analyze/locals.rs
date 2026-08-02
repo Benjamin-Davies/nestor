@@ -5,7 +5,7 @@ use itertools::Itertools;
 
 use crate::analyze::{
     DECLARATION_KIND, FUNCTION_DECLARATOR_KIND, FUNCTION_DEFINITION_KIND, IDENTIFIER_KIND,
-    PARAMETER_DECLARATION_KIND,
+    PARAMETER_DECLARATION_KIND, PREPROC_DEF_KIND, PREPROC_FUNCTION_DEF_KIND,
     types::{Ident, Range, SymbolKind},
 };
 
@@ -49,6 +49,8 @@ enum State {
     VarDef,
     FnDef { new_scope: Range },
     FnDefName { new_scope: Range },
+    Macro,
+    FunctionMacro,
 }
 
 fn collect_symbols(root: tree_sitter::Node, source: &Bytes, locals: &mut Locals) {
@@ -98,6 +100,32 @@ fn collect_symbols(root: tree_sitter::Node, source: &Bytes, locals: &mut Locals)
                         state = State::Start;
                         scope = new_scope;
                     }
+                    State::Macro => {
+                        locals
+                            .definitions
+                            .entry(name)
+                            .or_default()
+                            .push(Definition {
+                                name: range,
+                                scope,
+                                kind: SymbolKind::Macro,
+                            });
+
+                        state = State::Start;
+                    }
+                    State::FunctionMacro => {
+                        locals
+                            .definitions
+                            .entry(name)
+                            .or_default()
+                            .push(Definition {
+                                name: range,
+                                scope,
+                                kind: SymbolKind::FunctionMacro,
+                            });
+
+                        state = State::Start;
+                    }
                     _ => {}
                 }
             }
@@ -113,6 +141,12 @@ fn collect_symbols(root: tree_sitter::Node, source: &Bytes, locals: &mut Locals)
                 }
                 _ => {}
             },
+            PREPROC_DEF_KIND => {
+                state = State::Macro;
+            }
+            PREPROC_FUNCTION_DEF_KIND => {
+                state = State::FunctionMacro;
+            }
             _ => {}
         }
 

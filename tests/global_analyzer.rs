@@ -30,7 +30,7 @@ fn test_analyze() {
 
     assert_eq!(globals.type_symbols.len(), 991);
 
-    assert_eq!(globals.definitions.len(), 83);
+    assert_eq!(globals.definitions.len(), 116);
     let find_def = |s: &str| {
         globals
             .definitions
@@ -61,6 +61,24 @@ fn test_analyze() {
     assert_eq!(find_def("zMagicHeader"), None);
     // local var
     assert_eq!(find_def("zMsg"), None);
+    // macro
+    assert_eq!(
+        find_def("BTALLOC_ANY"),
+        Some(&Ident {
+            bytes: "BTALLOC_ANY".into(),
+            range: "59:8-59:19".parse().unwrap(),
+            kind: SymbolKind::Macro
+        })
+    );
+    // function macro
+    assert_eq!(
+        find_def("TRACE"),
+        Some(&Ident {
+            bytes: "TRACE".into(),
+            range: "40:9-40:14".parse().unwrap(),
+            kind: SymbolKind::FunctionMacro
+        })
+    );
 
     assert_eq!(globals.type_definitions.len(), 6);
 }

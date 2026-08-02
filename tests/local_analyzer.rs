@@ -23,7 +23,7 @@ fn test_analyze_definition_count() {
     let tree = parse(&source).unwrap();
     let locals = locals::analyze(tree.root_node(), &source);
 
-    assert_eq!(locals.definitions.len(), 664);
+    assert_eq!(locals.definitions.len(), 679);
 }
 
 #[test]

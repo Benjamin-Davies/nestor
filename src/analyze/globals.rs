@@ -88,6 +88,20 @@ pub fn type_def_query() -> &'static Query {
     QUERY.get_or_init(|| Query::new(language(), SOURCE).expect("error parsing query"))
 }
 
+pub fn macro_def_query() -> &'static Query {
+    const SOURCE: &str = "
+        [
+            (preproc_def
+                name: (identifier) @macro_name)
+            (preproc_function_def
+                name: (identifier) @function_macro_name)
+        ]
+    ";
+
+    static QUERY: OnceLock<Query> = OnceLock::new();
+    QUERY.get_or_init(|| Query::new(language(), SOURCE).expect("error parsing query"))
+}
+
 pub fn analyze<'a>(node: Node, source: Bytes) -> Globals {
     let mut globals = Globals::default();
 
@@ -184,6 +198,32 @@ pub fn analyze<'a>(node: Node, source: Bytes) -> Globals {
 
             let ident = Ident::from_node(node, &source).with_kind(SymbolKind::Type);
             globals.type_definitions.push(ident);
+        }
+    }
+
+    let query = macro_def_query();
+    let macro_name_index = query
+        .capture_index_for_name("macro_name")
+        .expect("unable to find capture index");
+    let function_macro_name_index = query
+        .capture_index_for_name("function_macro_name")
+        .expect("unable to find capture index");
+    let mut cursor = QueryCursor::new();
+    let mut matches = cursor.matches(query, node, &*source);
+    while let Some(m) = matches.next() {
+        for capture in m.captures {
+            let node = capture.node;
+            if node.byte_range().is_empty() {
+                continue;
+            }
+
+            if capture.index == macro_name_index {
+                let ident = Ident::from_node(node, &source).with_kind(SymbolKind::Macro);
+                globals.definitions.push(ident);
+            } else if capture.index == function_macro_name_index {
+                let ident = Ident::from_node(node, &source).with_kind(SymbolKind::FunctionMacro);
+                globals.definitions.push(ident);
+            }
         }
     }
 

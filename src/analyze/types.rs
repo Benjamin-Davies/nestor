@@ -33,6 +33,7 @@ pub enum SymbolKind {
     Function,
     Type,
     Macro,
+    FunctionMacro,
     /// These are never actually stored, just used for completions.
     Keyword,
 }
@@ -80,6 +81,7 @@ impl SymbolKind {
             SymbolKind::Function => "function",
             SymbolKind::Type => "type",
             SymbolKind::Macro => "macro",
+            SymbolKind::FunctionMacro => "function macro",
             SymbolKind::Keyword => "keyword",
         }
     }
@@ -148,6 +150,7 @@ impl From<SymbolKind> for Option<lsp_types::CompletionItemKind> {
             SymbolKind::Function => Some(K::FUNCTION),
             SymbolKind::Type => Some(K::CLASS),
             SymbolKind::Macro => Some(K::CONSTANT),
+            SymbolKind::FunctionMacro => Some(K::FUNCTION),
             SymbolKind::Keyword => Some(K::KEYWORD),
         }
     }

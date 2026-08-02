@@ -37,10 +37,12 @@ pub fn parse(source: &[u8]) -> anyhow::Result<Tree> {
 }
 
 pub const IDENTIFIER_KIND: u16 = 1;
-pub const STORAGE_CLASS_SPECIFIER_KIND: u16 = 242;
+pub const PREPROC_DEF_KIND: u16 = 165;
+pub const PREPROC_FUNCTION_DEF_KIND: u16 = 166;
 pub const FUNCTION_DEFINITION_KIND: u16 = 196;
 pub const DECLARATION_KIND: u16 = 198;
 pub const FUNCTION_DECLARATOR_KIND: u16 = 230;
+pub const STORAGE_CLASS_SPECIFIER_KIND: u16 = 242;
 pub const PARAMETER_DECLARATION_KIND: u16 = 260;
 pub const TYPE_IDENTIFIER_KIND: u16 = 362;
 
@@ -96,17 +98,14 @@ pub const KEYWORDS: &[&str] = &[
 mod tests {
     use crate::analyze::{
         DECLARATION_KIND, FUNCTION_DECLARATOR_KIND, FUNCTION_DEFINITION_KIND, IDENTIFIER_KIND,
-        PARAMETER_DECLARATION_KIND, STORAGE_CLASS_SPECIFIER_KIND, TYPE_IDENTIFIER_KIND, language,
+        PARAMETER_DECLARATION_KIND, PREPROC_DEF_KIND, PREPROC_FUNCTION_DEF_KIND,
+        STORAGE_CLASS_SPECIFIER_KIND, TYPE_IDENTIFIER_KIND, language,
     };
 
     #[test]
     fn kind_ids() {
         let l = language();
         assert_eq!(IDENTIFIER_KIND, l.id_for_node_kind("identifier", true));
-        assert_eq!(
-            STORAGE_CLASS_SPECIFIER_KIND,
-            l.id_for_node_kind("storage_class_specifier", true)
-        );
         assert_eq!(
             FUNCTION_DEFINITION_KIND,
             l.id_for_node_kind("function_definition", true)
@@ -117,12 +116,21 @@ mod tests {
             l.id_for_node_kind("function_declarator", true)
         );
         assert_eq!(
+            STORAGE_CLASS_SPECIFIER_KIND,
+            l.id_for_node_kind("storage_class_specifier", true)
+        );
+        assert_eq!(
             PARAMETER_DECLARATION_KIND,
             l.id_for_node_kind("parameter_declaration", true)
         );
         assert_eq!(
             TYPE_IDENTIFIER_KIND,
             l.id_for_node_kind("type_identifier", true)
+        );
+        assert_eq!(PREPROC_DEF_KIND, l.id_for_node_kind("preproc_def", true));
+        assert_eq!(
+            PREPROC_FUNCTION_DEF_KIND,
+            l.id_for_node_kind("preproc_function_def", true)
         );
     }
 }
