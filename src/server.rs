@@ -1,14 +1,15 @@
 use std::{collections::BTreeMap, ops::ControlFlow};
 
 use anyhow::Context;
+use bytes::Bytes;
 use clap::{crate_name, crate_version};
 use itertools::Itertools;
 use lsp_server::Message;
 use lsp_types::{
     CompletionItem, CompletionItemLabelDetails, CompletionList, CompletionParams,
-    DidChangeWorkspaceFoldersParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
-    GotoDefinitionParams, Location, Position, PositionEncodingKind, ReferenceParams,
-    TextDocumentIdentifier, TextDocumentItem, TextDocumentPositionParams, Uri,
+    DidChangeTextDocumentParams, DidChangeWorkspaceFoldersParams, DidCloseTextDocumentParams,
+    DidOpenTextDocumentParams, GotoDefinitionParams, Location, Position, PositionEncodingKind,
+    ReferenceParams, TextDocumentIdentifier, TextDocumentPositionParams, Uri,
 };
 
 use crate::{
@@ -47,7 +48,7 @@ pub fn run_server(connection: lsp_server::Connection) -> anyhow::Result<()> {
     globals_store.set_workspace_folders(&workspace_folders.unwrap_or_default());
 
     let mut server = Server {
-        connection: connection,
+        connection,
         documents: BTreeMap::new(),
         globals_store,
     };
@@ -172,7 +173,20 @@ impl Server {
             Notification::DidOpenTextDocument(DidOpenTextDocumentParams { text_document }) => {
                 tracing::info!("Opened {}", text_document.uri.as_str());
 
-                self.load_document(text_document)?;
+                self.load_document(text_document.uri, text_document.text.into())?;
+            }
+            Notification::DidChangeTextDocument(DidChangeTextDocumentParams {
+                text_document,
+                mut content_changes,
+            }) => {
+                tracing::info!("Changed {}", text_document.uri.as_str());
+
+                anyhow::ensure!(
+                    content_changes.len() == 1,
+                    "Received more than one change per event when in full change mode"
+                );
+                let change = content_changes.remove(0);
+                self.update_document(&text_document.uri, change.text)?;
             }
             Notification::DidCloseTextDocument(DidCloseTextDocumentParams { text_document }) => {
                 tracing::info!("Closed {}", text_document.uri.as_str());
@@ -193,12 +207,21 @@ impl Server {
         Ok(ControlFlow::Continue(()))
     }
 
-    fn load_document(&mut self, text_document: TextDocumentItem) -> anyhow::Result<()> {
-        self.globals_store.seed(&text_document.uri)?;
+    fn load_document(&mut self, uri: Uri, source: Bytes) -> anyhow::Result<()> {
+        self.globals_store.seed(&uri)?;
 
-        let uri = text_document.uri.clone();
-        let document = Document::try_from(text_document)?;
+        let document = Document::parse(source)?;
         self.documents.insert(uri, document);
+
+        Ok(())
+    }
+
+    fn update_document(&mut self, uri: &Uri, new_source: String) -> anyhow::Result<()> {
+        let document = self
+            .documents
+            .get_mut(uri)
+            .with_context(|| format!("Document not open: {}", uri.as_str()))?;
+        document.update(new_source.into())?;
 
         Ok(())
     }

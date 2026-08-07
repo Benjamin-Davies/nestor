@@ -1,6 +1,5 @@
 use bytes::Bytes;
 use itertools::Itertools;
-use lsp_types::TextDocumentItem;
 
 use crate::analyze::{
     IDENTIFIER_KIND, TYPE_IDENTIFIER_KIND, locals, parse,
@@ -13,12 +12,8 @@ pub struct Document {
     locals: locals::Locals,
 }
 
-impl TryFrom<TextDocumentItem> for Document {
-    type Error = anyhow::Error;
-
-    fn try_from(text_document: TextDocumentItem) -> anyhow::Result<Self> {
-        let source = Bytes::from(text_document.text);
-
+impl Document {
+    pub fn parse(source: Bytes) -> anyhow::Result<Self> {
         let tree = parse(&source)?;
 
         let locals = locals::analyze(tree.root_node(), &source);
@@ -29,9 +24,14 @@ impl TryFrom<TextDocumentItem> for Document {
             locals,
         })
     }
-}
 
-impl Document {
+    pub fn update(&mut self, new_source: Bytes) -> anyhow::Result<()> {
+        // TODO: We should really do an incremental update, but a complete reindex is easier for now.
+        *self = Self::parse(new_source)?;
+
+        Ok(())
+    }
+
     pub fn ident_at(&self, point: Point) -> Option<tree_sitter::Node<'_>> {
         let ts_point = tree_sitter::Point::from(point);
 
