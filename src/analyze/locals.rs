@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 
 use bytes::Bytes;
 use itertools::Itertools;
+use ropey::Rope;
 
 use crate::analyze::{
     DECLARATION_KIND, FUNCTION_DECLARATOR_KIND, FUNCTION_DEFINITION_KIND, IDENTIFIER_KIND,
@@ -22,7 +23,7 @@ pub struct Definition {
     pub kind: SymbolKind,
 }
 
-pub fn analyze(node: tree_sitter::Node, source: &Bytes) -> Locals {
+pub fn analyze(node: tree_sitter::Node, source: &Rope) -> Locals {
     let mut locals = Locals::default();
     collect_symbols(node, source, &mut locals);
 
@@ -53,7 +54,7 @@ enum State {
     FunctionMacro,
 }
 
-fn collect_symbols(root: tree_sitter::Node, source: &Bytes, locals: &mut Locals) {
+fn collect_symbols(root: tree_sitter::Node, source: &Rope, locals: &mut Locals) {
     let root_range = Range::from(root.range());
 
     let mut node = root;
@@ -69,7 +70,8 @@ fn collect_symbols(root: tree_sitter::Node, source: &Bytes, locals: &mut Locals)
 
         match kind {
             IDENTIFIER_KIND => {
-                let name = source.slice(node.byte_range());
+                // TODO: Be smarter about allocations
+                let name = Bytes::from(source.slice(node.byte_range()).to_string());
                 locals.symbols.entry(name.clone()).or_default().push(range);
 
                 match state {

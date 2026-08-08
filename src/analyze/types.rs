@@ -2,6 +2,7 @@ use std::{borrow::Cow, fmt, str::FromStr};
 
 use anyhow::Context;
 use bytes::Bytes;
+use ropey::Rope;
 use tree_sitter::Node;
 
 use crate::analyze::{IDENTIFIER_KIND, TYPE_IDENTIFIER_KIND};
@@ -39,12 +40,21 @@ pub enum SymbolKind {
 }
 
 impl Ident {
-    pub fn from_node(node: Node, source: &Bytes) -> Ident {
+    pub fn from_node(node: Node, source: &Bytes) -> Self {
+        Self::new(node, source.slice(node.byte_range()))
+    }
+
+    pub fn from_node_rope(node: Node, source: &Rope) -> Self {
+        // TODO: Be smarter about allocations
+        Self::new(node, source.slice(node.byte_range()).to_string().into())
+    }
+
+    fn new(node: Node, bytes: Bytes) -> Self {
         let ts_kind = node.kind_id();
         debug_assert!(matches!(ts_kind, IDENTIFIER_KIND | TYPE_IDENTIFIER_KIND));
 
-        Ident {
-            bytes: source.slice(node.byte_range()),
+        Self {
+            bytes,
             range: node.range().into(),
             kind: if ts_kind == TYPE_IDENTIFIER_KIND {
                 SymbolKind::Type
@@ -110,6 +120,15 @@ impl From<Point> for tree_sitter::Point {
         Self {
             row: value.row as usize,
             column: value.column as usize,
+        }
+    }
+}
+
+impl From<lsp_types::Range> for Range {
+    fn from(value: lsp_types::Range) -> Self {
+        Range {
+            start: value.start.into(),
+            end: value.end.into(),
         }
     }
 }

@@ -1,7 +1,6 @@
 use std::{collections::BTreeMap, ops::ControlFlow};
 
 use anyhow::Context;
-use bytes::Bytes;
 use clap::{crate_name, crate_version};
 use itertools::Itertools;
 use lsp_server::Message;
@@ -15,7 +14,7 @@ use lsp_types::{
 use crate::{
     analyze::{
         KEYWORDS,
-        types::{Point, SymbolKind},
+        types::{Point, Range, SymbolKind},
     },
     document::Document,
     globals::GlobalsStore,
@@ -78,7 +77,7 @@ fn server_capabilities() -> lsp_types::ServerCapabilities {
     lsp_types::ServerCapabilities {
         position_encoding: Some(PositionEncodingKind::UTF8),
         text_document_sync: Some(lsp_types::TextDocumentSyncCapability::Kind(
-            lsp_types::TextDocumentSyncKind::FULL,
+            lsp_types::TextDocumentSyncKind::INCREMENTAL,
         )),
         definition_provider: Some(lsp_types::OneOf::Left(true)),
         references_provider: Some(lsp_types::OneOf::Left(true)),
@@ -173,20 +172,19 @@ impl Server {
             Notification::DidOpenTextDocument(DidOpenTextDocumentParams { text_document }) => {
                 tracing::info!("Opened {}", text_document.uri.as_str());
 
-                self.load_document(text_document.uri, text_document.text.into())?;
+                self.load_document(text_document.uri, text_document.text)?;
             }
             Notification::DidChangeTextDocument(DidChangeTextDocumentParams {
                 text_document,
-                mut content_changes,
+                content_changes,
             }) => {
                 tracing::info!("Changed {}", text_document.uri.as_str());
 
-                anyhow::ensure!(
-                    content_changes.len() == 1,
-                    "Received more than one change per event when in full change mode"
-                );
-                let change = content_changes.remove(0);
-                self.update_document(&text_document.uri, change.text)?;
+                let changes = content_changes
+                    .into_iter()
+                    .filter_map(|change| Some((change.range?.into(), change.text)))
+                    .collect_vec();
+                self.update_document(&text_document.uri, changes)?;
             }
             Notification::DidCloseTextDocument(DidCloseTextDocumentParams { text_document }) => {
                 tracing::info!("Closed {}", text_document.uri.as_str());
@@ -207,7 +205,7 @@ impl Server {
         Ok(ControlFlow::Continue(()))
     }
 
-    fn load_document(&mut self, uri: Uri, source: Bytes) -> anyhow::Result<()> {
+    fn load_document(&mut self, uri: Uri, source: String) -> anyhow::Result<()> {
         self.globals_store.seed(&uri)?;
 
         let document = Document::parse(source)?;
@@ -216,12 +214,12 @@ impl Server {
         Ok(())
     }
 
-    fn update_document(&mut self, uri: &Uri, new_source: String) -> anyhow::Result<()> {
+    fn update_document(&mut self, uri: &Uri, changes: Vec<(Range, String)>) -> anyhow::Result<()> {
         let document = self
             .documents
             .get_mut(uri)
             .with_context(|| format!("Document not open: {}", uri.as_str()))?;
-        document.update(new_source.into())?;
+        document.update(changes)?;
 
         Ok(())
     }
@@ -256,7 +254,7 @@ impl Server {
 
         let global_definitions = self
             .globals_store
-            .find_definitions(document.bytes_for(ident));
+            .find_definitions(&document.bytes_for(ident));
         let global_locations = global_definitions
             .into_iter()
             .filter(|s| &s.uri != uri)
@@ -290,7 +288,7 @@ impl Server {
 
         let global_references = self
             .globals_store
-            .find_references(document.bytes_for(ident));
+            .find_references(&document.bytes_for(ident));
         locations.extend(
             global_references
                 .into_iter()

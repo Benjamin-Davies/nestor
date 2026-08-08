@@ -4,6 +4,7 @@ use std::{
 };
 
 use anyhow::Context;
+use ropey::Rope;
 use tree_sitter::{Language, Parser, Tree};
 
 pub mod dirs;
@@ -17,6 +18,28 @@ pub fn language() -> &'static Language {
 }
 
 pub fn parse(source: &[u8]) -> anyhow::Result<Tree> {
+    with_parser(|parser| parser.parse(source, None).context("error parsing source"))
+}
+
+pub fn parse_rope(source: &Rope, old_tree: Option<&Tree>) -> anyhow::Result<Tree> {
+    with_parser(|parser| {
+        parser
+            .parse_with_options(
+                &mut |index, _point| {
+                    source
+                        .get_chunk_at_byte(index)
+                        .map_or("", |(chunk, chunk_index, _, _)| {
+                            &chunk[index - chunk_index..]
+                        })
+                },
+                old_tree,
+                None,
+            )
+            .context("error parsing source")
+    })
+}
+
+fn with_parser<T>(f: impl FnOnce(&mut Parser) -> T) -> T {
     thread_local! {
         static PARSER: OnceCell<RefCell<Parser>> = OnceCell::new();
     }
@@ -32,7 +55,7 @@ pub fn parse(source: &[u8]) -> anyhow::Result<Tree> {
             })
             .borrow_mut();
 
-        parser.parse(source, None).context("error parsing source")
+        f(&mut parser)
     })
 }
 
