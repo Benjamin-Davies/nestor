@@ -24,7 +24,7 @@ pub struct LocalsStore {
 
 pub struct Document {
     source: Rope,
-    tree: Arc<tree_sitter::Tree>,
+    tree: tree_sitter::Tree,
     locals: locals::Locals,
 }
 
@@ -109,15 +109,13 @@ impl Document {
 
         Ok(Self {
             source: Rope::from(source),
-            tree: Arc::new(tree),
+            tree,
             // Locals are loaded on a background thread.
             locals: Default::default(),
         })
     }
 
     fn update(&mut self, changes: Vec<DocumentChange>) -> anyhow::Result<()> {
-        let old_tree = Arc::make_mut(&mut self.tree);
-
         for DocumentChange {
             old_range,
             new_text,
@@ -141,7 +139,7 @@ impl Document {
                 column: new_end_column,
             };
 
-            old_tree.edit(&InputEdit {
+            self.tree.edit(&InputEdit {
                 start_byte: start_index,
                 old_end_byte: end_index,
                 new_end_byte: start_index + new_text.len(),
@@ -151,8 +149,7 @@ impl Document {
             });
         }
 
-        let tree = parse_rope(&self.source, Some(&old_tree))?;
-        self.tree = Arc::new(tree);
+        self.tree = parse_rope(&self.source, Some(&self.tree))?;
 
         Ok(())
     }
@@ -302,6 +299,7 @@ fn analyze_document(document: &Mutex<Document>) -> anyhow::Result<()> {
     {
         let document = document.lock().expect("failed to lock document");
         source = Bytes::from(document.source.to_string());
+        // Trees are cheap to copy.
         tree = document.tree.clone();
     }
 
