@@ -44,8 +44,8 @@ impl Ident {
         Self::new(node, source.slice(node.byte_range()))
     }
 
+    /// This constructor allocates memory. Prefer `from_node` if possible.
     pub fn from_node_rope(node: Node, source: &Rope) -> Self {
-        // TODO: Be smarter about allocations
         Self::new(node, source.slice(node.byte_range()).to_string().into())
     }
 

@@ -1,6 +1,6 @@
 pub mod analyze;
-pub mod document;
 pub mod globals;
+pub mod locals;
 pub mod logging;
 pub mod messages;
 pub mod server;

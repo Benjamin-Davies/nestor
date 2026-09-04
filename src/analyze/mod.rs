@@ -119,10 +119,13 @@ pub const KEYWORDS: &[&str] = &[
 
 #[cfg(test)]
 mod tests {
+    use bytes::Bytes;
+    use ropey::Rope;
+
     use crate::analyze::{
         DECLARATION_KIND, FUNCTION_DECLARATOR_KIND, FUNCTION_DEFINITION_KIND, IDENTIFIER_KIND,
         PARAMETER_DECLARATION_KIND, PREPROC_DEF_KIND, PREPROC_FUNCTION_DEF_KIND,
-        STORAGE_CLASS_SPECIFIER_KIND, TYPE_IDENTIFIER_KIND, language,
+        STORAGE_CLASS_SPECIFIER_KIND, TYPE_IDENTIFIER_KIND, language, parse, parse_rope,
     };
 
     #[test]
@@ -155,5 +158,34 @@ mod tests {
             PREPROC_FUNCTION_DEF_KIND,
             l.id_for_node_kind("preproc_function_def", true)
         );
+    }
+
+    const BTREE_C: &str = include_str!("../../tests/btree.c");
+
+    #[test]
+    fn test_parse() {
+        let source = Bytes::from(BTREE_C);
+        let tree = parse(&source).unwrap();
+
+        assert_eq!(tree.root_node().child_count(), 409);
+    }
+
+    #[test]
+    fn test_parse_rope() {
+        let source = Rope::from(BTREE_C);
+        let tree = parse_rope(&source, None).unwrap();
+
+        assert_eq!(tree.root_node().child_count(), 409);
+    }
+
+    #[test]
+    fn test_parse_rope_incremental() {
+        let truncated_source = Bytes::from(&BTREE_C[..1000]);
+        let old_tree = parse(&truncated_source).unwrap();
+
+        let source = Rope::from(BTREE_C);
+        let tree = parse_rope(&source, Some(&old_tree)).unwrap();
+
+        assert_eq!(tree.root_node().child_count(), 409);
     }
 }

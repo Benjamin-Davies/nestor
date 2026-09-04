@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, ops::ControlFlow};
+use std::ops::ControlFlow;
 
 use anyhow::Context;
 use clap::{crate_name, crate_version};
@@ -14,16 +14,16 @@ use lsp_types::{
 use crate::{
     analyze::{
         KEYWORDS,
-        types::{Point, Range, SymbolKind},
+        types::{Point, SymbolKind},
     },
-    document::Document,
     globals::GlobalsStore,
+    locals::{DocumentChange, LocalsStore},
     messages::{Notification, Request, Response},
 };
 
 struct Server {
     connection: lsp_server::Connection,
-    documents: BTreeMap<Uri, Document>,
+    locals_store: LocalsStore,
     globals_store: GlobalsStore,
 }
 
@@ -43,12 +43,14 @@ pub fn run_server(connection: lsp_server::Connection) -> anyhow::Result<()> {
     })?;
     connection.initialize_finish(initialize_id, initialize_result)?;
 
+    let locals_store = LocalsStore::new();
+
     let mut globals_store = GlobalsStore::new();
     globals_store.set_workspace_folders(&workspace_folders.unwrap_or_default());
 
     let mut server = Server {
         connection,
-        documents: BTreeMap::new(),
+        locals_store,
         globals_store,
     };
     loop {
@@ -182,14 +184,19 @@ impl Server {
 
                 let changes = content_changes
                     .into_iter()
-                    .filter_map(|change| Some((change.range?.into(), change.text)))
+                    .filter_map(|change| {
+                        Some(DocumentChange {
+                            old_range: change.range?.into(),
+                            new_text: change.text,
+                        })
+                    })
                     .collect_vec();
-                self.update_document(&text_document.uri, changes)?;
+                self.update_document(text_document.uri, changes)?;
             }
             Notification::DidCloseTextDocument(DidCloseTextDocumentParams { text_document }) => {
                 tracing::info!("Closed {}", text_document.uri.as_str());
 
-                self.discard_document(&text_document.uri);
+                self.unload_document(text_document.uri)?;
             }
             Notification::DidChangeWorkspaceFolders(DidChangeWorkspaceFoldersParams { event }) => {
                 for added in &event.added {
@@ -208,26 +215,23 @@ impl Server {
     fn load_document(&mut self, uri: Uri, source: String) -> anyhow::Result<()> {
         self.globals_store.seed(&uri)?;
 
-        let document = Document::parse(source)?;
-        self.documents.insert(uri, document);
+        self.locals_store.load(uri, source)?;
 
         Ok(())
     }
 
-    fn update_document(&mut self, uri: &Uri, changes: Vec<(Range, String)>) -> anyhow::Result<()> {
-        let document = self
-            .documents
-            .get_mut(uri)
-            .with_context(|| format!("Document not open: {}", uri.as_str()))?;
-        document.update(changes)?;
+    fn update_document(&mut self, uri: Uri, changes: Vec<DocumentChange>) -> anyhow::Result<()> {
+        self.locals_store.update(uri, changes)?;
 
         Ok(())
     }
 
-    fn discard_document(&mut self, uri: &Uri) {
-        self.documents.remove(uri);
+    fn unload_document(&mut self, uri: Uri) -> anyhow::Result<()> {
+        self.globals_store.unseed(&uri);
 
-        self.globals_store.unseed(uri);
+        self.locals_store.unload(uri)?;
+
+        Ok(())
     }
 
     fn find_definitions(
@@ -235,7 +239,7 @@ impl Server {
         uri: &Uri,
         position: Position,
     ) -> Result<Vec<Location>, anyhow::Error> {
-        let document = self.documents.get(uri).context("No such open document")?;
+        let document = self.locals_store.document(uri)?;
         let ident = document
             .ident_at(position.into())
             .context("No ident at cursor")?;
@@ -268,7 +272,7 @@ impl Server {
     }
 
     fn find_references(&self, uri: &Uri, position: Position) -> anyhow::Result<Vec<Location>> {
-        let document = self.documents.get(uri).context("No such open document")?;
+        let document = self.locals_store.document(uri)?;
         let ident = document
             .ident_at(position.into())
             .context("No ident at cursor")?;
@@ -303,7 +307,7 @@ impl Server {
     }
 
     fn complete(&self, uri: &Uri, position: Position) -> anyhow::Result<CompletionList> {
-        let document = self.documents.get(uri).context("No such open document")?;
+        let document = self.locals_store.document(uri)?;
 
         let local_completions = document.completions(position.into());
 
