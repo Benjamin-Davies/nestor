@@ -4,7 +4,6 @@ use std::{
 };
 
 use anyhow::Context;
-use ropey::Rope;
 use tree_sitter::{Language, Parser, Tree};
 
 pub mod dirs;
@@ -17,24 +16,10 @@ pub fn language() -> &'static Language {
     LANGUAGE.get_or_init(|| tree_sitter_c::LANGUAGE.into())
 }
 
-pub fn parse(source: &[u8]) -> anyhow::Result<Tree> {
-    with_parser(|parser| parser.parse(source, None).context("error parsing source"))
-}
-
-pub fn parse_rope(source: &Rope, old_tree: Option<&Tree>) -> anyhow::Result<Tree> {
+pub fn parse(source: &[u8], old_tree: Option<&Tree>) -> anyhow::Result<Tree> {
     with_parser(|parser| {
         parser
-            .parse_with_options(
-                &mut |index, _point| {
-                    source
-                        .get_chunk_at_byte(index)
-                        .map_or("", |(chunk, chunk_index, _, _)| {
-                            &chunk[index - chunk_index..]
-                        })
-                },
-                old_tree,
-                None,
-            )
+            .parse(source, old_tree)
             .context("error parsing source")
     })
 }
@@ -120,12 +105,11 @@ pub const KEYWORDS: &[&str] = &[
 #[cfg(test)]
 mod tests {
     use bytes::Bytes;
-    use ropey::Rope;
 
     use crate::analyze::{
         DECLARATION_KIND, FUNCTION_DECLARATOR_KIND, FUNCTION_DEFINITION_KIND, IDENTIFIER_KIND,
         PARAMETER_DECLARATION_KIND, PREPROC_DEF_KIND, PREPROC_FUNCTION_DEF_KIND,
-        STORAGE_CLASS_SPECIFIER_KIND, TYPE_IDENTIFIER_KIND, language, parse, parse_rope,
+        STORAGE_CLASS_SPECIFIER_KIND, TYPE_IDENTIFIER_KIND, language, parse,
     };
 
     #[test]
@@ -165,26 +149,18 @@ mod tests {
     #[test]
     fn test_parse() {
         let source = Bytes::from(BTREE_C);
-        let tree = parse(&source).unwrap();
+        let tree = parse(&source, None).unwrap();
 
         assert_eq!(tree.root_node().child_count(), 409);
     }
 
     #[test]
-    fn test_parse_rope() {
-        let source = Rope::from(BTREE_C);
-        let tree = parse_rope(&source, None).unwrap();
-
-        assert_eq!(tree.root_node().child_count(), 409);
-    }
-
-    #[test]
-    fn test_parse_rope_incremental() {
+    fn test_parse_incremental() {
         let truncated_source = Bytes::from(&BTREE_C[..1000]);
-        let old_tree = parse(&truncated_source).unwrap();
+        let old_tree = parse(&truncated_source, None).unwrap();
 
-        let source = Rope::from(BTREE_C);
-        let tree = parse_rope(&source, Some(&old_tree)).unwrap();
+        let source = Bytes::from(BTREE_C);
+        let tree = parse(&source, Some(&old_tree)).unwrap();
 
         assert_eq!(tree.root_node().child_count(), 409);
     }

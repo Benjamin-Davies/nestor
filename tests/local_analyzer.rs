@@ -1,17 +1,19 @@
-use bytes::Bytes;
-use nestor::analyze::{
-    locals::{self, Definition},
-    parse,
-    types::SymbolKind,
+use nestor::{
+    analyze::{
+        locals::{self, Definition},
+        parse,
+        types::SymbolKind,
+    },
+    text::PositionEncoding,
 };
 
 const BTREE_C: &str = include_str!("btree.c");
 
 #[test]
 fn test_analyze_symbols() {
-    let source = Bytes::from(BTREE_C);
-    let tree = parse(&source).unwrap();
-    let locals = locals::analyze(tree.root_node(), &source);
+    let source = BTREE_C;
+    let tree = parse(source.as_bytes(), None).unwrap();
+    let locals = locals::analyze(tree.root_node(), &source.into(), PositionEncoding::Utf8);
 
     assert_eq!(locals.symbols.len(), 1003);
     assert_eq!(locals.symbols.get(b"pPage".as_slice()).unwrap().len(), 840);
@@ -19,18 +21,18 @@ fn test_analyze_symbols() {
 
 #[test]
 fn test_analyze_definition_count() {
-    let source = Bytes::from(BTREE_C);
-    let tree = parse(&source).unwrap();
-    let locals = locals::analyze(tree.root_node(), &source);
+    let source = BTREE_C;
+    let tree = parse(source.as_bytes(), None).unwrap();
+    let locals = locals::analyze(tree.root_node(), &source.into(), PositionEncoding::Utf8);
 
     assert_eq!(locals.definitions.len(), 679);
 }
 
 #[test]
 fn test_analyze_function_definition() {
-    let source = Bytes::from(BTREE_C);
-    let tree = parse(&source).unwrap();
-    let locals = locals::analyze(tree.root_node(), &source);
+    let source = BTREE_C;
+    let tree = parse(source.as_bytes(), None).unwrap();
+    let locals = locals::analyze(tree.root_node(), &source.into(), PositionEncoding::Utf8);
 
     assert_eq!(
         locals

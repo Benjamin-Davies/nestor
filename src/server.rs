@@ -7,18 +7,16 @@ use lsp_server::Message;
 use lsp_types::{
     CompletionItem, CompletionItemLabelDetails, CompletionList, CompletionParams,
     DidChangeTextDocumentParams, DidChangeWorkspaceFoldersParams, DidCloseTextDocumentParams,
-    DidOpenTextDocumentParams, GotoDefinitionParams, Location, Position, PositionEncodingKind,
+    DidOpenTextDocumentParams, GotoDefinitionParams, Location, PositionEncodingKind,
     ReferenceParams, TextDocumentIdentifier, TextDocumentPositionParams, Uri,
 };
 
 use crate::{
-    analyze::{
-        KEYWORDS,
-        types::{Point, SymbolKind},
-    },
+    analyze::{KEYWORDS, types::SymbolKind},
     globals::GlobalsStore,
-    locals::{DocumentChange, LocalsStore},
+    locals::LocalsStore,
     messages::{Notification, Request, Response},
+    text::{Change, Position, PositionEncoding},
 };
 
 struct Server {
@@ -31,11 +29,15 @@ pub fn run_server(connection: lsp_server::Connection) -> anyhow::Result<()> {
     let (initialize_id, initialize_params) = connection.initialize_start()?;
 
     let lsp_types::InitializeParams {
-        workspace_folders, ..
+        workspace_folders,
+        capabilities,
+        ..
     } = serde_json::from_value(initialize_params)?;
 
+    let encoding = choose_position_encoding(&capabilities);
+
     let initialize_result = serde_json::to_value(lsp_types::InitializeResult {
-        capabilities: server_capabilities(),
+        capabilities: server_capabilities(encoding),
         server_info: Some(lsp_types::ServerInfo {
             name: crate_name!().to_owned(),
             version: Some(crate_version!().to_owned()),
@@ -43,9 +45,9 @@ pub fn run_server(connection: lsp_server::Connection) -> anyhow::Result<()> {
     })?;
     connection.initialize_finish(initialize_id, initialize_result)?;
 
-    let locals_store = LocalsStore::new();
+    let locals_store = LocalsStore::new(encoding);
 
-    let mut globals_store = GlobalsStore::new();
+    let mut globals_store = GlobalsStore::new(encoding);
     globals_store.set_workspace_folders(&workspace_folders.unwrap_or_default());
 
     let mut server = Server {
@@ -75,9 +77,24 @@ pub fn run_server(connection: lsp_server::Connection) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn server_capabilities() -> lsp_types::ServerCapabilities {
+fn choose_position_encoding(capabilities: &lsp_types::ClientCapabilities) -> PositionEncoding {
+    let mut has_utf8 = false;
+    if let Some(general) = &capabilities.general {
+        if let Some(encodings) = &general.position_encodings {
+            has_utf8 = encodings.contains(&PositionEncodingKind::UTF8);
+        }
+    }
+
+    if has_utf8 {
+        PositionEncoding::Utf8
+    } else {
+        PositionEncoding::Utf16
+    }
+}
+
+fn server_capabilities(encoding: PositionEncoding) -> lsp_types::ServerCapabilities {
     lsp_types::ServerCapabilities {
-        position_encoding: Some(PositionEncodingKind::UTF8),
+        position_encoding: Some(encoding.into()),
         text_document_sync: Some(lsp_types::TextDocumentSyncCapability::Kind(
             lsp_types::TextDocumentSyncKind::INCREMENTAL,
         )),
@@ -113,10 +130,10 @@ impl Server {
                 tracing::info!(
                     "Go to definition {} {}",
                     uri.as_str(),
-                    Point::from(position)
+                    Position::from(position)
                 );
 
-                let locations = self.find_definitions(&uri, position)?;
+                let locations = self.find_definitions(&uri, position.into())?;
 
                 self.connection
                     .sender
@@ -133,9 +150,13 @@ impl Server {
                     ..
                 },
             ) => {
-                tracing::info!("Find references {} {}", uri.as_str(), Point::from(position));
+                tracing::info!(
+                    "Find references {} {}",
+                    uri.as_str(),
+                    Position::from(position)
+                );
 
-                let locations = self.find_references(&uri, position)?;
+                let locations = self.find_references(&uri, position.into())?;
 
                 self.connection
                     .sender
@@ -152,9 +173,9 @@ impl Server {
                     ..
                 },
             ) => {
-                tracing::info!("Complete {} {}", uri.as_str(), Point::from(position));
+                tracing::info!("Complete {} {}", uri.as_str(), Position::from(position));
 
-                let list = self.complete(&uri, position)?;
+                let list = self.complete(&uri, position.into())?;
 
                 self.connection
                     .sender
@@ -182,15 +203,7 @@ impl Server {
             }) => {
                 tracing::info!("Changed {}", text_document.uri.as_str());
 
-                let changes = content_changes
-                    .into_iter()
-                    .filter_map(|change| {
-                        Some(DocumentChange {
-                            old_range: change.range?.into(),
-                            new_text: change.text,
-                        })
-                    })
-                    .collect_vec();
+                let changes = content_changes.into_iter().map(Change::from).collect_vec();
                 self.update_document(text_document.uri, changes)?;
             }
             Notification::DidCloseTextDocument(DidCloseTextDocumentParams { text_document }) => {
@@ -220,7 +233,7 @@ impl Server {
         Ok(())
     }
 
-    fn update_document(&mut self, uri: Uri, changes: Vec<DocumentChange>) -> anyhow::Result<()> {
+    fn update_document(&mut self, uri: Uri, changes: Vec<Change>) -> anyhow::Result<()> {
         self.locals_store.update(uri, changes)?;
 
         Ok(())
@@ -258,7 +271,7 @@ impl Server {
 
         let global_definitions = self
             .globals_store
-            .find_definitions(&document.bytes_for(ident));
+            .find_definitions(&document.text_for(ident));
         let global_locations = global_definitions
             .into_iter()
             .filter(|s| &s.uri != uri)
@@ -292,7 +305,7 @@ impl Server {
 
         let global_references = self
             .globals_store
-            .find_references(&document.bytes_for(ident));
+            .find_references(&document.text_for(ident));
         locations.extend(
             global_references
                 .into_iter()

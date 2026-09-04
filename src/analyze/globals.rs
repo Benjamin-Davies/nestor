@@ -5,7 +5,10 @@ use std::sync::OnceLock;
 use bytes::Bytes;
 use tree_sitter::{Node, Query, QueryCursor, StreamingIterator};
 
-use crate::analyze::{IDENTIFIER_KIND, STORAGE_CLASS_SPECIFIER_KIND, language, types::Ident};
+use crate::{
+    analyze::{IDENTIFIER_KIND, STORAGE_CLASS_SPECIFIER_KIND, language, types::Ident},
+    text::PositionEncoding,
+};
 
 use super::types::SymbolKind;
 
@@ -102,7 +105,7 @@ pub fn macro_def_query() -> &'static Query {
     QUERY.get_or_init(|| Query::new(language(), SOURCE).expect("error parsing query"))
 }
 
-pub fn analyze<'a>(node: Node, source: Bytes) -> Globals {
+pub fn analyze<'a>(node: Node, source: Bytes, encoding: PositionEncoding) -> Globals {
     let mut globals = Globals::default();
 
     let mut cursor = QueryCursor::new();
@@ -114,7 +117,7 @@ pub fn analyze<'a>(node: Node, source: Bytes) -> Globals {
                 continue;
             }
 
-            let ident = Ident::from_node(node, &source);
+            let ident = Ident::from_node(node, &source, encoding);
             globals.symbols.push(ident);
         }
     }
@@ -128,7 +131,7 @@ pub fn analyze<'a>(node: Node, source: Bytes) -> Globals {
                 continue;
             }
 
-            let ident = Ident::from_node(node, &source).with_kind(SymbolKind::Type);
+            let ident = Ident::from_node(node, &source, encoding).with_kind(SymbolKind::Type);
             globals.type_symbols.push(ident);
         }
     }
@@ -150,7 +153,8 @@ pub fn analyze<'a>(node: Node, source: Bytes) -> Globals {
                         continue;
                     }
 
-                    let ident = Ident::from_node(node, &source).with_kind(SymbolKind::Function);
+                    let ident =
+                        Ident::from_node(node, &source, encoding).with_kind(SymbolKind::Function);
                     globals.definitions.push(ident);
                 }
                 kind => unreachable!("{kind}"),
@@ -179,7 +183,8 @@ pub fn analyze<'a>(node: Node, source: Bytes) -> Globals {
                         continue;
                     }
 
-                    let ident = Ident::from_node(node, &source).with_kind(SymbolKind::Variable);
+                    let ident =
+                        Ident::from_node(node, &source, encoding).with_kind(SymbolKind::Variable);
                     globals.definitions.push(ident);
                 }
                 kind => unreachable!("{kind}"),
@@ -196,7 +201,7 @@ pub fn analyze<'a>(node: Node, source: Bytes) -> Globals {
                 continue;
             }
 
-            let ident = Ident::from_node(node, &source).with_kind(SymbolKind::Type);
+            let ident = Ident::from_node(node, &source, encoding).with_kind(SymbolKind::Type);
             globals.type_definitions.push(ident);
         }
     }
@@ -218,10 +223,11 @@ pub fn analyze<'a>(node: Node, source: Bytes) -> Globals {
             }
 
             if capture.index == macro_name_index {
-                let ident = Ident::from_node(node, &source).with_kind(SymbolKind::Macro);
+                let ident = Ident::from_node(node, &source, encoding).with_kind(SymbolKind::Macro);
                 globals.definitions.push(ident);
             } else if capture.index == function_macro_name_index {
-                let ident = Ident::from_node(node, &source).with_kind(SymbolKind::FunctionMacro);
+                let ident =
+                    Ident::from_node(node, &source, encoding).with_kind(SymbolKind::FunctionMacro);
                 globals.definitions.push(ident);
             }
         }

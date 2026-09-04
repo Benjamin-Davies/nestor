@@ -5,32 +5,32 @@ use std::{
 };
 
 use anyhow::Context;
-use bytes::Bytes;
+use bytes_str::BytesStr;
 use crossbeam_channel::{Receiver, RecvError, RecvTimeoutError, Sender, unbounded};
 use itertools::Itertools;
 use lsp_types::Uri;
-use ropey::Rope;
-use tree_sitter::InputEdit;
 
-use crate::analyze::{
-    IDENTIFIER_KIND, TYPE_IDENTIFIER_KIND, locals, parse, parse_rope,
-    types::{Ident, Point, Range, SymbolKind},
+use crate::{
+    analyze::{
+        IDENTIFIER_KIND, TYPE_IDENTIFIER_KIND, locals, parse,
+        types::{Ident, SymbolKind},
+    },
+    text::{
+        Change, Position, PositionEncoding, PositionRange, buffer::TextBuffer, flat_rope::FlatRope,
+    },
 };
 
 pub struct LocalsStore {
+    encoding: PositionEncoding,
     documents: BTreeMap<Uri, Arc<Mutex<Document>>>,
     background_queue_tx: Sender<BackgroundAction>,
 }
 
 pub struct Document {
-    source: Rope,
+    source: TextBuffer,
+    encoding: PositionEncoding,
     tree: tree_sitter::Tree,
     locals: locals::Locals,
-}
-
-pub struct DocumentChange {
-    pub old_range: Range,
-    pub new_text: String,
 }
 
 enum BackgroundAction {
@@ -49,19 +49,20 @@ enum BackgroundAction {
 const UPDATE_DEBOUNCE: Duration = Duration::from_secs(1);
 
 impl LocalsStore {
-    pub fn new() -> Self {
+    pub fn new(encoding: PositionEncoding) -> Self {
         let (background_queue_tx, background_queue_rx) = unbounded();
 
         std::thread::spawn(|| background_thread(background_queue_rx));
 
         Self {
+            encoding,
             documents: BTreeMap::new(),
             background_queue_tx,
         }
     }
 
     pub fn load(&mut self, uri: Uri, source: String) -> anyhow::Result<()> {
-        let document = Document::parse(source)?;
+        let document = Document::parse(source, self.encoding)?;
 
         let document = Arc::new(Mutex::new(document));
         self.documents.insert(uri.clone(), document.clone());
@@ -72,7 +73,7 @@ impl LocalsStore {
         Ok(())
     }
 
-    pub fn update(&mut self, uri: Uri, changes: Vec<DocumentChange>) -> anyhow::Result<()> {
+    pub fn update(&mut self, uri: Uri, changes: Vec<Change>) -> anyhow::Result<()> {
         {
             let mut document = self.document(&uri)?;
             document.update(changes)?;
@@ -104,63 +105,69 @@ impl LocalsStore {
 }
 
 impl Document {
-    fn parse(source: String) -> anyhow::Result<Self> {
-        let tree = parse(source.as_bytes())?;
+    fn parse(source: String, encoding: PositionEncoding) -> anyhow::Result<Self> {
+        let tree = parse(source.as_bytes(), None)?;
 
         Ok(Self {
-            source: Rope::from(source),
+            source: TextBuffer::from(source),
+            encoding,
             tree,
             // Locals are loaded on a background thread.
             locals: Default::default(),
         })
     }
 
-    fn update(&mut self, changes: Vec<DocumentChange>) -> anyhow::Result<()> {
-        for DocumentChange {
-            old_range,
-            new_text,
-        } in changes
-        {
-            // TODO: Consider non-ASCII chars
-            let start_index = self.source.line_to_char(old_range.start.row as usize)
-                + old_range.start.column as usize;
-            let end_index = self.source.line_to_char(old_range.end.row as usize)
-                + old_range.end.column as usize;
-
-            self.source.remove(start_index..end_index);
-            self.source.insert(start_index, &new_text);
-
-            let new_end_char = start_index + new_text.chars().count();
-            let new_end_line = self.source.char_to_line(new_end_char);
-            let new_end_line_start = self.source.line_to_char(new_end_line);
-            let new_end_column = new_end_char - new_end_line_start;
-            let new_end_position = tree_sitter::Point {
-                row: new_end_line,
-                column: new_end_column,
-            };
-
-            self.tree.edit(&InputEdit {
-                start_byte: start_index,
-                old_end_byte: end_index,
-                new_end_byte: start_index + new_text.len(),
-                start_position: old_range.start.into(),
-                old_end_position: old_range.end.into(),
-                new_end_position,
-            });
+    fn update(&mut self, changes: Vec<Change>) -> anyhow::Result<()> {
+        let mut incremental_changes = Vec::new();
+        let mut complete_change = None;
+        for change in changes {
+            match change {
+                Change::Complete(new_text) => {
+                    complete_change = Some(new_text);
+                    // All changes before this point would have been overwritten.
+                    incremental_changes.clear();
+                }
+                Change::Incremental(incremental_change) => {
+                    incremental_changes.push(incremental_change)
+                }
+            }
         }
 
-        self.tree = parse_rope(&self.source, Some(&self.tree))?;
+        let use_old_tree;
+        if let Some(new_text) = complete_change {
+            self.source = TextBuffer::from(new_text);
+            use_old_tree = false;
+        } else {
+            use_old_tree = true;
+        }
+
+        if !incremental_changes.is_empty() {
+            let mut rope = FlatRope::from(std::mem::take(&mut self.source));
+
+            for change in incremental_changes {
+                let edit = rope.edit(change, self.encoding)?;
+
+                if use_old_tree {
+                    self.tree.edit(&edit);
+                }
+            }
+
+            self.source = rope.freeze();
+        }
+
+        let old_tree = use_old_tree.then_some(&self.tree);
+        self.tree = parse(self.source.as_bytes(), old_tree)?;
 
         Ok(())
     }
 
-    pub fn ident_at(&self, point: Point) -> Option<tree_sitter::Node<'_>> {
-        let ts_point = tree_sitter::Point::from(point);
+    pub fn ident_at(&self, pos: Position) -> Option<tree_sitter::Node<'_>> {
+        let (byte, _) = pos.to_ts(&self.source, self.encoding);
 
         let node = self
             .tree
             .root_node()
-            .descendant_for_point_range(ts_point, ts_point)?;
+            .descendant_for_byte_range(byte, byte)?;
 
         if let IDENTIFIER_KIND | TYPE_IDENTIFIER_KIND = node.kind_id() {
             Some(node)
@@ -171,8 +178,8 @@ impl Document {
 
     /// Returns the locations of the references we found and a boolean
     /// to indicate if the symbol is a local variable.
-    pub fn find_references(&self, ident: tree_sitter::Node) -> (Vec<Range>, bool) {
-        let ident = Ident::from_node_rope(ident, &self.source);
+    pub fn find_references(&self, ident: tree_sitter::Node) -> (Vec<PositionRange>, bool) {
+        let ident = Ident::from_node(ident, &self.source.to_bytes(), self.encoding);
 
         let symbols = self.locals.symbols.get(&ident.bytes);
 
@@ -194,28 +201,25 @@ impl Document {
         }
     }
 
-    pub fn find_definitions(&self, ident: tree_sitter::Node) -> Vec<Range> {
-        let ident = Ident::from_node_rope(ident, &self.source);
+    pub fn find_definitions(&self, ident: tree_sitter::Node) -> Vec<PositionRange> {
+        let ident = Ident::from_node(ident, &self.source.to_bytes(), self.encoding);
 
         let definitions = self.locals.definitions(ident);
 
         definitions.into_iter().map(|d| d.name).collect()
     }
 
-    pub fn bytes_for<'a>(&'a self, node: tree_sitter::Node) -> Vec<u8> {
-        self.source
-            .byte_slice(node.byte_range())
-            .to_string()
-            .into_bytes()
+    pub fn text_for<'a>(&'a self, node: tree_sitter::Node) -> BytesStr {
+        self.source.slice(node.byte_range())
     }
 
-    pub fn completions(&self, point: Point) -> Vec<(&[u8], SymbolKind)> {
+    pub fn completions(&self, pos: Position) -> Vec<(&[u8], SymbolKind)> {
         self.locals
             .definitions
             .iter()
             .flat_map(move |(name, defs)| {
                 defs.iter()
-                    .filter(move |def| def.scope.contains_point(point))
+                    .filter(move |def| def.scope.contains_pos(pos))
                     .map(|def| (name as &[_], def.kind))
             })
             .collect_vec()
@@ -295,15 +299,19 @@ fn recv_deadline_maybe<T>(
 }
 
 fn analyze_document(document: &Mutex<Document>) -> anyhow::Result<()> {
-    let (source, tree);
-    {
+    let (source, tree, encoding) = {
         let document = document.lock().expect("failed to lock document");
-        source = Bytes::from(document.source.to_string());
-        // Trees are cheap to copy.
-        tree = document.tree.clone();
-    }
 
-    let locals = locals::analyze(tree.root_node(), &source);
+        (
+            // Ropes are cheap to copy.
+            document.source.to_bytes_str(),
+            // Trees are cheap to copy.
+            document.tree.clone(),
+            document.encoding,
+        )
+    };
+
+    let locals = locals::analyze(tree.root_node(), &source, encoding);
 
     {
         let mut document = document.lock().expect("failed to lock document");

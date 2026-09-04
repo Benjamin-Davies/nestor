@@ -1,30 +1,34 @@
 use std::collections::BTreeMap;
 
 use bytes::Bytes;
+use bytes_str::BytesStr;
 use itertools::Itertools;
 
-use crate::analyze::{
-    DECLARATION_KIND, FUNCTION_DECLARATOR_KIND, FUNCTION_DEFINITION_KIND, IDENTIFIER_KIND,
-    PARAMETER_DECLARATION_KIND, PREPROC_DEF_KIND, PREPROC_FUNCTION_DEF_KIND,
-    types::{Ident, Range, SymbolKind},
+use crate::{
+    analyze::{
+        DECLARATION_KIND, FUNCTION_DECLARATOR_KIND, FUNCTION_DEFINITION_KIND, IDENTIFIER_KIND,
+        PARAMETER_DECLARATION_KIND, PREPROC_DEF_KIND, PREPROC_FUNCTION_DEF_KIND,
+        types::{Ident, SymbolKind},
+    },
+    text::{PositionEncoding, PositionRange},
 };
 
 #[derive(Debug, Default)]
 pub struct Locals {
-    pub symbols: BTreeMap<Bytes, Vec<Range>>,
+    pub symbols: BTreeMap<Bytes, Vec<PositionRange>>,
     pub definitions: BTreeMap<Bytes, Vec<Definition>>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Definition {
-    pub name: Range,
-    pub scope: Range,
+    pub name: PositionRange,
+    pub scope: PositionRange,
     pub kind: SymbolKind,
 }
 
-pub fn analyze(node: tree_sitter::Node, source: &Bytes) -> Locals {
+pub fn analyze(node: tree_sitter::Node, source: &BytesStr, encoding: PositionEncoding) -> Locals {
     let mut locals = Locals::default();
-    collect_symbols(node, source, &mut locals);
+    collect_symbols(node, source, encoding, &mut locals);
 
     locals
 }
@@ -47,21 +51,26 @@ impl Locals {
 enum State {
     Start,
     VarDef,
-    FnDef { new_scope: Range },
-    FnDefName { new_scope: Range },
+    FnDef { new_scope: PositionRange },
+    FnDefName { new_scope: PositionRange },
     Macro,
     FunctionMacro,
 }
 
-fn collect_symbols(root: tree_sitter::Node, source: &Bytes, locals: &mut Locals) {
-    let root_range = Range::from(root.range());
+fn collect_symbols(
+    root: tree_sitter::Node,
+    source: &BytesStr,
+    encoding: PositionEncoding,
+    locals: &mut Locals,
+) {
+    let root_range = PositionRange::from_ts(root.range(), source, encoding);
 
     let mut node = root;
     let mut state = State::Start;
     let mut scope = root_range;
     loop {
         let kind = node.kind_id();
-        let range = node.range().into();
+        let range = PositionRange::from_ts(node.range(), source, encoding);
 
         if !scope.contains(range) {
             scope = root_range;
@@ -69,7 +78,7 @@ fn collect_symbols(root: tree_sitter::Node, source: &Bytes, locals: &mut Locals)
 
         match kind {
             IDENTIFIER_KIND => {
-                let name = source.slice(node.byte_range());
+                let name = source.slice(node.byte_range()).into_bytes();
                 locals.symbols.entry(name.clone()).or_default().push(range);
 
                 match state {

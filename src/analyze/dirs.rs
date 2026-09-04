@@ -4,27 +4,27 @@ use bytes::{Buf, BufMut, Bytes, BytesMut};
 use crossbeam_channel::{Sender, unbounded};
 use itertools::Itertools;
 
-use crate::analyze::{
-    globals, parse,
-    types::{Range, SymbolKind},
+use crate::{
+    analyze::{globals, parse, types::SymbolKind},
+    text::{PositionEncoding, PositionRange},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Symbol {
     pub name: Bytes,
     pub path: Arc<Path>,
-    pub range: Range,
+    pub range: PositionRange,
     pub is_definition: bool,
     pub kind: SymbolKind,
 }
 
 /// Returns the number of definitions found
-pub fn analyze(path: &Path) -> Vec<Symbol> {
+pub fn analyze(path: &Path, encoding: PositionEncoding) -> Vec<Symbol> {
     rayon::scope(|s| {
         let (symbols_tx, symbols_rx) = unbounded();
 
         s.spawn(|s| {
-            if let Err(err) = analyze_inner(s, path, symbols_tx) {
+            if let Err(err) = analyze_inner(s, path, encoding, symbols_tx) {
                 tracing::error!("Error analyzing folder {path:?}: {err}");
             }
         });
@@ -36,6 +36,7 @@ pub fn analyze(path: &Path) -> Vec<Symbol> {
 fn analyze_inner(
     scope: &rayon::Scope,
     path: &Path,
+    encoding: PositionEncoding,
     symbols_tx: Sender<Vec<Symbol>>,
 ) -> anyhow::Result<()> {
     if exclude_path(path) {
@@ -45,7 +46,7 @@ fn analyze_inner(
     let metadata = path.metadata()?;
     if metadata.is_file() {
         if is_c_file(path) {
-            let symbols = analyze_file(path)?;
+            let symbols = analyze_file(path, encoding)?;
             symbols_tx.send(symbols)?;
         }
     } else if metadata.is_dir() {
@@ -54,10 +55,12 @@ fn analyze_inner(
             let entry_path = entry.path();
             let symbols_tx = symbols_tx.clone();
 
-            scope.spawn(move |s| match analyze_inner(s, &entry_path, symbols_tx) {
-                Ok(()) => {}
-                Err(err) => tracing::error!("Error analyzing dir: {err:?}"),
-            });
+            scope.spawn(
+                move |s| match analyze_inner(s, &entry_path, encoding, symbols_tx) {
+                    Ok(()) => {}
+                    Err(err) => tracing::error!("Error analyzing dir: {err:?}"),
+                },
+            );
         }
     } else {
         tracing::info!("Path does not point to file or dir: {path:?}");
@@ -71,12 +74,12 @@ fn is_c_file(path: &Path) -> bool {
     extension == Some("c".as_ref()) || extension == Some("h".as_ref())
 }
 
-fn analyze_file(path: &Path) -> anyhow::Result<Vec<Symbol>> {
+fn analyze_file(path: &Path, encoding: PositionEncoding) -> anyhow::Result<Vec<Symbol>> {
     let source = fs::read(path)?;
     let source = Bytes::from(source);
-    let tree = parse(&source)?;
+    let tree = parse(&source, None)?;
 
-    let globals = globals::analyze(tree.root_node(), source);
+    let globals = globals::analyze(tree.root_node(), source, encoding);
 
     let path = Arc::<Path>::from(path);
     let mut symbols = Vec::with_capacity(globals.definitions.len() + globals.symbols.len());

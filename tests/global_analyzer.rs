@@ -1,15 +1,22 @@
 use bytes::Bytes;
-use nestor::analyze::{
-    globals, parse,
-    types::{Ident, SymbolKind},
+use nestor::{
+    analyze::{
+        globals, parse,
+        types::{Ident, SymbolKind},
+    },
+    text::PositionEncoding,
 };
 
 const BTREE_C: &[u8] = include_bytes!("btree.c");
 
 #[test]
 fn test_analyze() {
-    let tree = parse(BTREE_C).unwrap();
-    let globals = globals::analyze(tree.root_node(), Bytes::from(BTREE_C));
+    let tree = parse(BTREE_C, None).unwrap();
+    let globals = globals::analyze(
+        tree.root_node(),
+        Bytes::from(BTREE_C),
+        PositionEncoding::Utf8,
+    );
 
     assert_eq!(globals.symbols.len(), 13596);
     let find_sym = |s: &str| {

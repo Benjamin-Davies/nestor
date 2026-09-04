@@ -10,10 +10,8 @@ use itertools::Itertools;
 use lsp_types::{Uri, WorkspaceFolder};
 
 use crate::{
-    analyze::{
-        dirs,
-        types::{Range, SymbolKind},
-    },
+    analyze::{dirs, types::SymbolKind},
+    text::{PositionEncoding, PositionRange},
     utils::binary_search_range_by_key,
 };
 
@@ -26,7 +24,7 @@ pub struct GlobalsStore {
 pub struct Symbol {
     pub name: Bytes,
     pub uri: Uri,
-    pub range: Range,
+    pub range: PositionRange,
     pub kind: SymbolKind,
 }
 
@@ -49,10 +47,10 @@ struct RootData {
 }
 
 impl GlobalsStore {
-    pub fn new() -> Self {
+    pub fn new(encoding: PositionEncoding) -> Self {
         let (load_queue_tx, load_queue_rx) = unbounded();
 
-        std::thread::spawn(|| load_files(load_queue_rx));
+        std::thread::spawn(move || load_files(load_queue_rx, encoding));
 
         Self {
             workspace_folders: Vec::new(),
@@ -138,15 +136,15 @@ impl GlobalsStore {
         });
     }
 
-    pub fn find_definitions(&self, name: &[u8]) -> Vec<Symbol> {
+    pub fn find_definitions(&self, name: &str) -> Vec<Symbol> {
         self.find_symbol(name, true)
     }
 
-    pub fn find_references(&self, name: &[u8]) -> Vec<Symbol> {
+    pub fn find_references(&self, name: &str) -> Vec<Symbol> {
         self.find_symbol(name, false)
     }
 
-    fn find_symbol(&self, name: &[u8], is_definition: bool) -> Vec<Symbol> {
+    fn find_symbol(&self, name: &str, is_definition: bool) -> Vec<Symbol> {
         let mut symbols = Vec::new();
         for root in &self.roots {
             let root_data = root.data.lock().expect("failed to lock root data");
@@ -190,8 +188,9 @@ impl GlobalsStore {
 }
 
 impl RootData {
-    fn find_symbol(&self, name: &[u8]) -> &[dirs::Symbol] {
-        let range = binary_search_range_by_key(&self.symbols, &name, |symbol| &symbol.name);
+    fn find_symbol(&self, name: &str) -> &[dirs::Symbol] {
+        let range =
+            binary_search_range_by_key(&self.symbols, &name.as_bytes(), |symbol| &symbol.name);
 
         &self.symbols[range]
     }
@@ -212,10 +211,10 @@ impl TryFrom<&dirs::Symbol> for Symbol {
 
 // This function receives weak node handles so that we can discard them if all
 // files are closed.
-fn load_files(load_queue_rx: Receiver<(PathBuf, RootDataHandle)>) {
+fn load_files(load_queue_rx: Receiver<(PathBuf, RootDataHandle)>, encoding: PositionEncoding) {
     let mut stack = Vec::new();
     while let Some((path, root_data)) = stack.pop().or_else(|| load_queue_rx.recv().ok()) {
-        let mut symbols = dirs::analyze(&path);
+        let mut symbols = dirs::analyze(&path, encoding);
         tracing::info!("Analyzed {path:?}: {}", symbols.len());
 
         symbols.sort();

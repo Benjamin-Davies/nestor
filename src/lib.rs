@@ -4,4 +4,5 @@ pub mod locals;
 pub mod logging;
 pub mod messages;
 pub mod server;
+pub mod text;
 pub mod utils;

@@ -11,12 +11,13 @@ Nestor is named after the [Kea](https://en.wikipedia.org/wiki/Kea) (*Nestor Nota
 * Basic scope awareness
 * Efficient for large codebases
 * Single rust binary
+* UTF-8 native, but also supports UTF-16 clients
 
 **Non-goals:**
 * Type-aware analysis
 * Preprocessor handling beyond goto definition for macros
-* Full unicode support (will probably work to some extent, but there will likely be normalisation and potential perf issues)
-* Support for text encodings other than UTF-8
+* UTF-16 files
+* Unicode normalization
 
 ## Usage
 
