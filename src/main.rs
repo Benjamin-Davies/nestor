@@ -1,6 +1,6 @@
 use std::process::ExitCode;
 
-use nestor::{logging, server::run_server};
+use nestor::{logging, memory, server::run_server};
 
 fn main() -> ExitCode {
     logging::init(tracing::Level::INFO);
@@ -8,6 +8,8 @@ fn main() -> ExitCode {
     tracing::info!("Starting lsp server");
     let (connection, io_threads) = lsp_server::Connection::stdio();
     logging::set_lsp_sender(connection.sender.clone());
+
+    memory::im_a_sacrifice();
 
     let ret = match run_server(connection) {
         Ok(()) => ExitCode::SUCCESS,
