@@ -38,6 +38,10 @@ fn analyze_inner(
     path: &Path,
     symbols_tx: Sender<Vec<Symbol>>,
 ) -> anyhow::Result<()> {
+    if exclude_path(path) {
+        return Ok(());
+    }
+
     let metadata = path.metadata()?;
     if metadata.is_file() {
         if is_c_file(path) {
@@ -143,6 +147,16 @@ fn consolidate_symbols(symbols: &mut [Symbol]) {
         }
         symbol.name = buf.slice(..symbol.name.len());
         next_start = symbol.name.len();
+    }
+}
+
+const EXCLUDED_PATH_COMPONENTS: &[&str] = &["dist", "build", "out", "output", "target"];
+
+fn exclude_path(path: &Path) -> bool {
+    if let Some(file_name) = path.file_name().and_then(|s| s.to_str()) {
+        file_name.starts_with(".") && EXCLUDED_PATH_COMPONENTS.contains(&file_name)
+    } else {
+        false
     }
 }
 

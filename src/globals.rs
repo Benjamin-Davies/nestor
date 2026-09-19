@@ -17,8 +17,6 @@ use crate::{
     utils::binary_search_range_by_key,
 };
 
-const GIT_DIR_NAME: &str = ".git";
-
 pub struct GlobalsStore {
     workspace_folders: Vec<PathBuf>,
     roots: Vec<Root>,
@@ -238,6 +236,8 @@ fn path_to_file_uri(path: &Path) -> Option<Uri> {
     let s = path.as_os_str().to_str()?;
     format!("file://{s}").parse().ok()
 }
+
+const GIT_DIR_NAME: &str = ".git";
 
 fn find_git_dir<'a>(mut path: &'a Path, base: &Path) -> Option<&'a Path> {
     while path.starts_with(base) {
