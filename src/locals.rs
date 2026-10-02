@@ -220,6 +220,7 @@ impl Document {
             .flat_map(move |(name, defs)| {
                 defs.iter()
                     .filter(move |def| def.scope.contains_pos(pos))
+                    .filter(move |def| !def.name.contains_pos(pos))
                     .map(|def| (name as &[_], def.kind))
             })
             .collect_vec()
