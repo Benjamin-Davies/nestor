@@ -155,6 +155,7 @@ define_notification! {
     CancelRequest = "$/cancelRequest",
     DidOpenTextDocument(DidOpenTextDocumentParams) = "textDocument/didOpen",
     DidChangeTextDocument(DidChangeTextDocumentParams) = "textDocument/didChange",
+    DidSaveTextDocument(DidSaveTextDocumentParams) = "textDocument/didSave",
     DidCloseTextDocument(DidCloseTextDocumentParams) = "textDocument/didClose",
     DidChangeConfiguration(DidChangeConfigurationParams) = "workspace/didChangeConfiguration",
     DidChangeWorkspaceFolders(DidChangeWorkspaceFoldersParams) = "workspace/didChangeWorkspaceFolders",

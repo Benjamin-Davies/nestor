@@ -46,7 +46,10 @@ fn analyze_inner(
     let metadata = path.metadata()?;
     if metadata.is_file() {
         if is_c_file(path) {
-            let symbols = analyze_file(path, encoding)?;
+            let source = fs::read(path)?;
+            let source = Bytes::from(source);
+
+            let symbols = analyze_file(path, source, encoding)?;
             symbols_tx.send(symbols)?;
         }
     } else if metadata.is_dir() {
@@ -74,9 +77,11 @@ fn is_c_file(path: &Path) -> bool {
     extension == Some("c".as_ref()) || extension == Some("h".as_ref())
 }
 
-fn analyze_file(path: &Path, encoding: PositionEncoding) -> anyhow::Result<Vec<Symbol>> {
-    let source = fs::read(path)?;
-    let source = Bytes::from(source);
+pub fn analyze_file(
+    path: &Path,
+    source: Bytes,
+    encoding: PositionEncoding,
+) -> anyhow::Result<Vec<Symbol>> {
     let tree = parse(&source, None)?;
 
     let globals = globals::analyze(tree.root_node(), source, encoding);

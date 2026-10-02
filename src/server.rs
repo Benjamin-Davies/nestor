@@ -7,8 +7,8 @@ use lsp_server::Message;
 use lsp_types::{
     CompletionItem, CompletionItemLabelDetails, CompletionList, CompletionParams,
     DidChangeTextDocumentParams, DidChangeWorkspaceFoldersParams, DidCloseTextDocumentParams,
-    DidOpenTextDocumentParams, GotoDefinitionParams, Location, PositionEncodingKind,
-    ReferenceParams, TextDocumentIdentifier, TextDocumentPositionParams, Uri,
+    DidOpenTextDocumentParams, DidSaveTextDocumentParams, GotoDefinitionParams, Location,
+    PositionEncodingKind, ReferenceParams, TextDocumentIdentifier, TextDocumentPositionParams, Uri,
 };
 
 use crate::{
@@ -95,8 +95,14 @@ fn choose_position_encoding(capabilities: &lsp_types::ClientCapabilities) -> Pos
 fn server_capabilities(encoding: PositionEncoding) -> lsp_types::ServerCapabilities {
     lsp_types::ServerCapabilities {
         position_encoding: Some(encoding.into()),
-        text_document_sync: Some(lsp_types::TextDocumentSyncCapability::Kind(
-            lsp_types::TextDocumentSyncKind::INCREMENTAL,
+        text_document_sync: Some(lsp_types::TextDocumentSyncCapability::Options(
+            lsp_types::TextDocumentSyncOptions {
+                open_close: Some(true),
+                change: Some(lsp_types::TextDocumentSyncKind::INCREMENTAL),
+                will_save: None,
+                will_save_wait_until: None,
+                save: Some(lsp_types::TextDocumentSyncSaveOptions::Supported(true)),
+            },
         )),
         definition_provider: Some(lsp_types::OneOf::Left(true)),
         references_provider: Some(lsp_types::OneOf::Left(true)),
@@ -206,6 +212,13 @@ impl Server {
                 let changes = content_changes.into_iter().map(Change::from).collect_vec();
                 self.update_document(text_document.uri, changes)?;
             }
+            Notification::DidSaveTextDocument(DidSaveTextDocumentParams {
+                text_document, ..
+            }) => {
+                tracing::info!("Saved {}", text_document.uri.as_str());
+
+                self.save_document(&text_document.uri)?;
+            }
             Notification::DidCloseTextDocument(DidCloseTextDocumentParams { text_document }) => {
                 tracing::info!("Closed {}", text_document.uri.as_str());
 
@@ -235,6 +248,15 @@ impl Server {
 
     fn update_document(&mut self, uri: Uri, changes: Vec<Change>) -> anyhow::Result<()> {
         self.locals_store.update(uri, changes)?;
+
+        Ok(())
+    }
+
+    fn save_document(&mut self, uri: &Uri) -> anyhow::Result<()> {
+        let document = self.locals_store.document(uri)?;
+        let source = document.to_bytes();
+
+        self.globals_store.refresh(uri, source)?;
 
         Ok(())
     }

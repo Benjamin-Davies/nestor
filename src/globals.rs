@@ -18,7 +18,7 @@ use crate::{
 pub struct GlobalsStore {
     workspace_folders: Vec<PathBuf>,
     roots: Vec<Root>,
-    load_queue_tx: Sender<(PathBuf, RootDataHandle)>,
+    load_queue_tx: Sender<LoadCommand>,
 }
 
 pub struct Symbol {
@@ -44,6 +44,11 @@ type RootDataHandle = Arc<Mutex<RootData>>;
 struct RootData {
     /// A sorted list of symbols in this root.
     symbols: Vec<dirs::Symbol>,
+}
+
+enum LoadCommand {
+    LoadRoot(PathBuf, RootDataHandle),
+    RefreshFile(PathBuf, Bytes, RootDataHandle),
 }
 
 impl GlobalsStore {
@@ -89,7 +94,7 @@ impl GlobalsStore {
             return Ok(());
         };
 
-        if let Some(root) = self.roots.iter_mut().find(|r| path.starts_with(&r.path)) {
+        if let Some(root) = self.root_for_path(&path) {
             root.open_file_count += 1;
 
             // TODO: Load the file into the root if we haven't seen it before
@@ -108,7 +113,7 @@ impl GlobalsStore {
             let root_data = RootDataHandle::default();
 
             self.load_queue_tx
-                .send((root_path.clone(), root_data.clone()))?;
+                .send(LoadCommand::LoadRoot(root_path.clone(), root_data.clone()))?;
 
             let root = Root {
                 path: root_path,
@@ -134,6 +139,28 @@ impl GlobalsStore {
             }
             root.open_file_count != 0
         });
+    }
+
+    /// Called when a file is saved to refresh its symbols.
+    pub fn refresh(&mut self, uri: &Uri, source: Bytes) -> anyhow::Result<()> {
+        let Some(path) = file_uri_to_path(&uri) else {
+            return Ok(());
+        };
+
+        let Some(root) = self.root_for_path(&path) else {
+            tracing::info!("{path:?} is not in a root");
+            return Ok(());
+        };
+        let root_data = root.data.clone();
+
+        self.load_queue_tx
+            .send(LoadCommand::RefreshFile(path, source, root_data))?;
+
+        Ok(())
+    }
+
+    fn root_for_path(&mut self, path: &Path) -> Option<&mut Root> {
+        self.roots.iter_mut().find(|r| path.starts_with(&r.path))
     }
 
     pub fn find_definitions(&self, name: &str) -> Vec<Symbol> {
@@ -211,15 +238,31 @@ impl TryFrom<&dirs::Symbol> for Symbol {
 
 // This function receives weak node handles so that we can discard them if all
 // files are closed.
-fn load_files(load_queue_rx: Receiver<(PathBuf, RootDataHandle)>, encoding: PositionEncoding) {
+fn load_files(load_queue_rx: Receiver<LoadCommand>, encoding: PositionEncoding) {
     let mut stack = Vec::new();
-    while let Some((path, root_data)) = stack.pop().or_else(|| load_queue_rx.recv().ok()) {
-        let mut symbols = dirs::analyze(&path, encoding);
-        tracing::info!("Analyzed {path:?}: {}", symbols.len());
+    while let Some(load_command) = stack.pop().or_else(|| load_queue_rx.recv().ok()) {
+        match load_command {
+            LoadCommand::LoadRoot(path, root_data) => {
+                let mut symbols = dirs::analyze(&path, encoding);
+                tracing::info!("Analyzed {path:?}: {}", symbols.len());
 
-        symbols.sort();
-        let mut root_data = root_data.lock().expect("failed to lock root data");
-        root_data.symbols = symbols;
+                symbols.sort();
+                let mut root_data = root_data.lock().expect("failed to lock root data");
+                root_data.symbols = symbols;
+            }
+            LoadCommand::RefreshFile(path, source, root_data) => {
+                let symbols = dirs::analyze_file(&path, source, encoding).unwrap_or_else(|err| {
+                    tracing::error!("Error analyzing {path:?}: {err}");
+                    Vec::new()
+                });
+                tracing::info!("Re-analyzed {path:?}: {}", symbols.len());
+
+                let mut root_data = root_data.lock().expect("failed to lock root data");
+                root_data.symbols.retain(|s| *s.path != path);
+                root_data.symbols.extend(symbols);
+                root_data.symbols.sort();
+            }
+        }
     }
 }
 

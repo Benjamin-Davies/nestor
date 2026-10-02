@@ -5,6 +5,7 @@ use std::{
 };
 
 use anyhow::Context;
+use bytes::Bytes;
 use bytes_str::BytesStr;
 use crossbeam_channel::{Receiver, RecvError, RecvTimeoutError, Sender, unbounded};
 use itertools::Itertools;
@@ -159,6 +160,10 @@ impl Document {
         self.tree = parse(self.source.as_bytes(), old_tree)?;
 
         Ok(())
+    }
+
+    pub fn to_bytes(&self) -> Bytes {
+        self.source.to_bytes()
     }
 
     pub fn ident_at(&self, pos: Position) -> Option<tree_sitter::Node<'_>> {
