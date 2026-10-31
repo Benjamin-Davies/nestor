@@ -11,6 +11,8 @@ pub mod globals;
 pub mod locals;
 pub mod types;
 
+mod walk;
+
 pub fn language() -> &'static Language {
     static LANGUAGE: OnceLock<Language> = OnceLock::new();
     LANGUAGE.get_or_init(|| tree_sitter_c::LANGUAGE.into())

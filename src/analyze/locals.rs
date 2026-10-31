@@ -9,6 +9,7 @@ use crate::{
         DECLARATION_KIND, FUNCTION_DECLARATOR_KIND, FUNCTION_DEFINITION_KIND, IDENTIFIER_KIND,
         PARAMETER_DECLARATION_KIND, PREPROC_DEF_KIND, PREPROC_FUNCTION_DEF_KIND,
         types::{Ident, SymbolKind},
+        walk::walk_preorder,
     },
     text::{PositionEncoding, PositionRange},
 };
@@ -65,11 +66,9 @@ fn collect_symbols(
 ) {
     let root_range = PositionRange::from_ts(root.range(), source, encoding);
 
-    let mut cursor = root.walk();
     let mut state = State::Start;
     let mut scope = root_range;
-    loop {
-        let node = cursor.node();
+    for node in walk_preorder(root) {
         let kind = node.kind_id();
         let range = PositionRange::from_ts(node.range(), source, encoding);
 
@@ -158,23 +157,6 @@ fn collect_symbols(
                 state = State::FunctionMacro;
             }
             _ => {}
-        }
-
-        // Descend into children first (pre-order), otherwise try the next
-        // sibling, otherwise walk back up until we find an ancestor that has
-        // a next sibling (or we've exhausted the whole subtree).
-        if !cursor.goto_first_child() {
-            loop {
-                if node == root {
-                    return;
-                }
-                if cursor.goto_next_sibling() {
-                    break;
-                }
-                if !cursor.goto_parent() {
-                    return;
-                }
-            }
         }
     }
 }
