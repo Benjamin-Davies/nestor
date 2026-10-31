@@ -65,10 +65,11 @@ fn collect_symbols(
 ) {
     let root_range = PositionRange::from_ts(root.range(), source, encoding);
 
-    let mut node = root;
+    let mut cursor = root.walk();
     let mut state = State::Start;
     let mut scope = root_range;
     loop {
+        let node = cursor.node();
         let kind = node.kind_id();
         let range = PositionRange::from_ts(node.range(), source, encoding);
 
@@ -162,20 +163,16 @@ fn collect_symbols(
         // Descend into children first (pre-order), otherwise try the next
         // sibling, otherwise walk back up until we find an ancestor that has
         // a next sibling (or we've exhausted the whole subtree).
-        if let Some(child) = node.child(0) {
-            node = child;
-        } else {
+        if !cursor.goto_first_child() {
             loop {
                 if node == root {
                     return;
                 }
-                if let Some(sibling) = node.next_sibling() {
-                    node = sibling;
+                if cursor.goto_next_sibling() {
                     break;
                 }
-                match node.parent() {
-                    Some(parent) => node = parent,
-                    None => return,
+                if !cursor.goto_parent() {
+                    return;
                 }
             }
         }
