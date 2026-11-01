@@ -56,10 +56,8 @@ fn collect_symbols(
     let root_range = PositionRange::from_ts(root.range(), source, encoding);
 
     for symbol in walk_symbols(root) {
-        let name_range = PositionRange::from_ts(symbol.range, source, encoding);
-        let name = source
-            .slice(symbol.range.start_byte..symbol.range.end_byte)
-            .into_bytes();
+        let name_range = PositionRange::from_ts(symbol.node.range(), source, encoding);
+        let name = source.slice(symbol.node.byte_range()).into_bytes();
 
         if symbol.definition {
             let scope = if let Scope::Block(range) = symbol.scope {

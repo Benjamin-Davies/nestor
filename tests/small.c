@@ -198,3 +198,19 @@ static void sharedLockTrace(
   printf("\n");
   fflush(stdout);
 }
+
+typedef struct CellArray CellArray;
+struct CellArray {
+  int nCell;              /* Number of cells in apCell[] */
+  MemPage *pRef;          /* Reference page */
+  u8 **apCell;            /* All cells begin balanced */
+  u16 *szCell;            /* Local size of all cells in apCell[] */
+  u8 *apEnd[NB*2];        /* MemPage.aDataEnd values */
+  int ixNx[NB*2];         /* Index of at which we move to the next apEnd[] */
+};
+
+enum Foo {
+  FOO,
+  BAR,
+  BAZ,
+};

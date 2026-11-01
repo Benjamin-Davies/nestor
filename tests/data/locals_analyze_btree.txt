@@ -16638,6 +16638,13 @@ Locals {
         ],
     },
     definitions: {
+        b"": [
+            Definition {
+                name: 2851:46-2851:46,
+                scope: 2839:0-2872:1,
+                kind: Variable,
+            },
+        ],
         b"BTALLOC_ANY": [
             Definition {
                 name: 59:8-59:19,
@@ -16666,6 +16673,23 @@ Locals {
                 kind: FunctionMacro,
             },
         ],
+        b"CellArray": [
+            Definition {
+                name: 7590:15-7590:24,
+                scope: 1:0-11601:0,
+                kind: Type,
+            },
+            Definition {
+                name: 7590:25-7590:34,
+                scope: 1:0-11601:0,
+                kind: Type,
+            },
+            Definition {
+                name: 7591:7-7591:16,
+                scope: 1:0-11601:0,
+                kind: Type,
+            },
+        ],
         b"GLOBAL": [
             Definition {
                 name: 2762:6-2762:12,
@@ -16688,6 +16712,23 @@ Locals {
                 name: 72:8-72:19,
                 scope: 1:0-11601:0,
                 kind: FunctionMacro,
+            },
+        ],
+        b"KeyInfo": [
+            Definition {
+                name: 4699:9-4699:16,
+                scope: 4695:0-4761:1,
+                kind: Type,
+            },
+            Definition {
+                name: 4766:9-4766:16,
+                scope: 4762:0-4774:1,
+                kind: Type,
+            },
+            Definition {
+                name: 4779:9-4779:16,
+                scope: 4775:0-4787:1,
+                kind: Type,
             },
         ],
         b"N": [
@@ -16724,18 +16765,6 @@ Locals {
                 name: 7524:8-7524:10,
                 scope: 1:0-11601:0,
                 kind: Macro,
-            },
-        ],
-        b"ROUND8": [
-            Definition {
-                name: 4798:9-4798:15,
-                scope: 4797:0-4799:1,
-                kind: Variable,
-            },
-            Definition {
-                name: 11563:41-11563:47,
-                scope: 11563:0-11563:67,
-                kind: Variable,
             },
         ],
         b"SHARED_LOCK_TRACE": [
@@ -17265,6 +17294,13 @@ Locals {
                 kind: Function,
             },
         ],
+        b"balance_deeper_called": [
+            Definition {
+                name: 9141:16-9141:37,
+                scope: 9135:0-9264:1,
+                kind: Variable,
+            },
+        ],
         b"balance_nonroot": [
             Definition {
                 name: 8250:11-8250:26,
@@ -17277,6 +17313,13 @@ Locals {
                 name: 8012:11-8012:24,
                 scope: 1:0-11601:0,
                 kind: Function,
+            },
+        ],
+        b"balance_quick_called": [
+            Definition {
+                name: 9140:16-9140:36,
+                scope: 9135:0-9264:1,
+                kind: Variable,
             },
         ],
         b"bias": [
@@ -17547,12 +17590,22 @@ Locals {
         ],
         b"c": [
             Definition {
+                name: 5880:23-5880:24,
+                scope: 5813:0-5954:1,
+                kind: Variable,
+            },
+            Definition {
                 name: 5978:6-5978:7,
                 scope: 5972:0-6002:1,
                 kind: Variable,
             },
             Definition {
                 name: 6084:8-6084:9,
+                scope: 6044:0-6272:1,
+                kind: Variable,
+            },
+            Definition {
+                name: 6123:23-6123:24,
                 scope: 6044:0-6272:1,
                 kind: Variable,
             },
@@ -18596,6 +18649,16 @@ Locals {
                 kind: Variable,
             },
             Definition {
+                name: 10815:9-10815:10,
+                scope: 10814:0-10825:1,
+                kind: Variable,
+            },
+            Definition {
+                name: 10827:9-10827:10,
+                scope: 10826:0-10843:1,
+                kind: Variable,
+            },
+            Definition {
                 name: 10867:6-10867:7,
                 scope: 10860:0-11125:1,
                 kind: Variable,
@@ -19306,8 +19369,18 @@ Locals {
         ],
         b"idx": [
             Definition {
+                name: 5880:18-5880:21,
+                scope: 5813:0-5954:1,
+                kind: Variable,
+            },
+            Definition {
                 name: 5974:6-5974:9,
                 scope: 5972:0-6002:1,
+                kind: Variable,
+            },
+            Definition {
+                name: 6123:18-6123:21,
+                scope: 6044:0-6272:1,
                 kind: Variable,
             },
             Definition {
@@ -19566,6 +19639,21 @@ Locals {
                 kind: Variable,
             },
             Definition {
+                name: 7818:9-7818:10,
+                scope: 7808:0-7864:1,
+                kind: Variable,
+            },
+            Definition {
+                name: 8116:9-8116:10,
+                scope: 8115:0-8148:1,
+                kind: Variable,
+            },
+            Definition {
+                name: 8261:9-8261:10,
+                scope: 8250:0-9032:1,
+                kind: Variable,
+            },
+            Definition {
                 name: 10815:6-10815:7,
                 scope: 10814:0-10825:1,
                 kind: Variable,
@@ -19573,6 +19661,11 @@ Locals {
             Definition {
                 name: 10827:6-10827:7,
                 scope: 10826:0-10843:1,
+                kind: Variable,
+            },
+            Definition {
+                name: 11064:16-11064:17,
+                scope: 10860:0-11125:1,
                 kind: Variable,
             },
         ],
@@ -19590,6 +19683,11 @@ Locals {
             Definition {
                 name: 7755:6-7755:7,
                 scope: 7742:0-7797:1,
+                kind: Variable,
+            },
+            Definition {
+                name: 8261:12-8261:13,
+                scope: 8250:0-9032:1,
                 kind: Variable,
             },
         ],
@@ -19752,6 +19850,13 @@ Locals {
                 kind: Variable,
             },
         ],
+        b"mn": [
+            Definition {
+                name: 7087:19-7087:21,
+                scope: 7079:0-7262:1,
+                kind: Variable,
+            },
+        ],
         b"modifyPagePointer": [
             Definition {
                 name: 3886:11-3886:28,
@@ -19871,6 +19976,11 @@ Locals {
                 kind: Variable,
             },
             Definition {
+                name: 7087:12-7087:13,
+                scope: 7079:0-7262:1,
+                kind: Variable,
+            },
+            Definition {
                 name: 8118:9-8118:10,
                 scope: 8115:0-8148:1,
                 kind: Variable,
@@ -19889,6 +19999,13 @@ Locals {
         b"n1": [
             Definition {
                 name: 3147:6-3147:8,
+                scope: 3146:0-3153:1,
+                kind: Variable,
+            },
+        ],
+        b"n2": [
+            Definition {
+                name: 3147:10-3147:12,
                 scope: 3146:0-3153:1,
                 kind: Variable,
             },
@@ -19978,6 +20095,13 @@ Locals {
             Definition {
                 name: 10874:6-10874:11,
                 scope: 10860:0-11125:1,
+                kind: Variable,
+            },
+        ],
+        b"nCellAtStart": [
+            Definition {
+                name: 8440:18-8440:30,
+                scope: 8250:0-9032:1,
                 kind: Variable,
             },
         ],
@@ -23850,6 +23974,13 @@ Locals {
                 kind: Variable,
             },
         ],
+        b"prev": [
+            Definition {
+                name: 10886:9-10886:13,
+                scope: 10860:0-11125:1,
+                kind: Variable,
+            },
+        ],
         b"ptfFlags": [
             Definition {
                 name: 10064:6-10064:14,
@@ -24217,6 +24348,11 @@ Locals {
                 kind: Variable,
             },
             Definition {
+                name: 7087:15-7087:17,
+                scope: 7079:0-7262:1,
+                kind: Variable,
+            },
+            Definition {
                 name: 7276:6-7276:8,
                 scope: 7272:0-7314:1,
                 kind: Variable,
@@ -24229,6 +24365,11 @@ Locals {
             Definition {
                 name: 7470:8-7470:10,
                 scope: 7433:0-7505:1,
+                kind: Variable,
+            },
+            Definition {
+                name: 7763:12-7763:14,
+                scope: 7742:0-7797:1,
                 kind: Variable,
             },
             Definition {
@@ -24467,6 +24608,13 @@ Locals {
                 kind: FunctionMacro,
             },
         ],
+        b"ret": [
+            Definition {
+                name: 1048:16-1048:19,
+                scope: 1046:0-1058:1,
+                kind: Variable,
+            },
+        ],
         b"sCheck": [
             Definition {
                 name: 11162:14-11162:20,
@@ -24503,6 +24651,11 @@ Locals {
             },
         ],
         b"saveCursorsOnList": [
+            Definition {
+                name: 793:27-793:44,
+                scope: 1:0-11601:0,
+                kind: Variable,
+            },
             Definition {
                 name: 833:27-833:44,
                 scope: 1:0-11601:0,
@@ -24617,6 +24770,11 @@ Locals {
             Definition {
                 name: 1765:6-1765:10,
                 scope: 1757:0-1814:1,
+                kind: Variable,
+            },
+            Definition {
+                name: 2137:14-2137:18,
+                scope: 2101:0-2177:1,
                 kind: Variable,
             },
             Definition {
@@ -25362,6 +25520,13 @@ Locals {
                 kind: Variable,
             },
         ],
+        b"szD": [
+            Definition {
+                name: 8630:15-8630:18,
+                scope: 8250:0-9032:1,
+                kind: Variable,
+            },
+        ],
         b"szLeft": [
             Definition {
                 name: 8622:8-8622:14,
@@ -25445,6 +25610,18 @@ Locals {
                 name: 3499:12-3499:31,
                 scope: 1:0-11601:0,
                 kind: Function,
+            },
+        ],
+        b"upr": [
+            Definition {
+                name: 5880:13-5880:16,
+                scope: 5813:0-5954:1,
+                kind: Variable,
+            },
+            Definition {
+                name: 6123:13-6123:16,
+                scope: 6044:0-6272:1,
+                kind: Variable,
             },
         ],
         b"usableSize": [
@@ -25577,6 +25754,11 @@ Locals {
             Definition {
                 name: 10814:44-10814:45,
                 scope: 10814:0-10825:1,
+                kind: Variable,
+            },
+            Definition {
+                name: 10827:12-10827:13,
+                scope: 10826:0-10843:1,
                 kind: Variable,
             },
             Definition {

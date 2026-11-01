@@ -46,16 +46,25 @@ fn with_parser<T>(f: impl FnOnce(&mut Parser) -> T) -> T {
     })
 }
 
-pub const IDENTIFIER_KIND: u16 = 1;
-pub const STATIC_KEYWORD_KIND: u16 = 71;
-pub const PREPROC_DEF_KIND: u16 = 165;
-pub const PREPROC_FUNCTION_DEF_KIND: u16 = 166;
-pub const FUNCTION_DEFINITION_KIND: u16 = 196;
-pub const DECLARATION_KIND: u16 = 198;
-pub const FUNCTION_DECLARATOR_KIND: u16 = 230;
-pub const STORAGE_CLASS_SPECIFIER_KIND: u16 = 242;
-pub const PARAMETER_DECLARATION_KIND: u16 = 260;
-pub const TYPE_IDENTIFIER_KIND: u16 = 362;
+pub(crate) const IDENTIFIER_KIND: u16 = 1;
+pub(crate) const STATIC_KEYWORD_KIND: u16 = 71;
+pub(crate) const LEFT_BRACKET_KIND: u16 = 70;
+pub(crate) const RIGHT_BRACKET_KIND: u16 = 72;
+pub(crate) const EQUALS_KIND: u16 = 73;
+pub(crate) const PREPROC_DEF_KIND: u16 = 165;
+pub(crate) const PREPROC_FUNCTION_DEF_KIND: u16 = 166;
+pub(crate) const PREPROC_PARAMS_KIND: u16 = 167;
+pub(crate) const FUNCTION_DEFINITION_KIND: u16 = 196;
+pub(crate) const DECLARATION_KIND: u16 = 198;
+pub(crate) const TYPE_DEFINITION_KIND: u16 = 199;
+pub(crate) const FUNCTION_DECLARATOR_KIND: u16 = 230;
+pub(crate) const ENUM_SPECIFIER_KIND: u16 = 247;
+pub(crate) const STRUCT_SPECIFIER_KIND: u16 = 249;
+pub(crate) const UNION_SPECIFIER_KIND: u16 = 250;
+pub(crate) const FIELD_DECLARATION_KIND: u16 = 253;
+pub(crate) const ENUMERATOR_KIND: u16 = 256;
+pub(crate) const PARAMETER_DECLARATION_KIND: u16 = 260;
+pub(crate) const TYPE_IDENTIFIER_KIND: u16 = 362;
 
 pub const KEYWORDS: &[&str] = &[
     "alignas",
@@ -110,42 +119,44 @@ mod tests {
     use bytes::Bytes;
 
     use crate::analyze::{
-        DECLARATION_KIND, FUNCTION_DECLARATOR_KIND, FUNCTION_DEFINITION_KIND, IDENTIFIER_KIND,
-        PARAMETER_DECLARATION_KIND, PREPROC_DEF_KIND, PREPROC_FUNCTION_DEF_KIND,
-        STATIC_KEYWORD_KIND, STORAGE_CLASS_SPECIFIER_KIND, TYPE_IDENTIFIER_KIND, language, parse,
+        DECLARATION_KIND, ENUM_SPECIFIER_KIND, ENUMERATOR_KIND, EQUALS_KIND,
+        FIELD_DECLARATION_KIND, FUNCTION_DECLARATOR_KIND, FUNCTION_DEFINITION_KIND,
+        IDENTIFIER_KIND, LEFT_BRACKET_KIND, PARAMETER_DECLARATION_KIND, PREPROC_DEF_KIND,
+        PREPROC_FUNCTION_DEF_KIND, PREPROC_PARAMS_KIND, RIGHT_BRACKET_KIND, STATIC_KEYWORD_KIND,
+        STRUCT_SPECIFIER_KIND, TYPE_DEFINITION_KIND, TYPE_IDENTIFIER_KIND, UNION_SPECIFIER_KIND,
+        language, parse,
     };
 
     #[test]
     fn kind_ids() {
         let l = language();
-        assert_eq!(IDENTIFIER_KIND, l.id_for_node_kind("identifier", true));
-        assert_eq!(
-            FUNCTION_DEFINITION_KIND,
-            l.id_for_node_kind("function_definition", true)
-        );
-        assert_eq!(DECLARATION_KIND, l.id_for_node_kind("declaration", true));
-        assert_eq!(
-            FUNCTION_DECLARATOR_KIND,
-            l.id_for_node_kind("function_declarator", true)
-        );
-        assert_eq!(
-            STORAGE_CLASS_SPECIFIER_KIND,
-            l.id_for_node_kind("storage_class_specifier", true)
-        );
-        assert_eq!(
-            PARAMETER_DECLARATION_KIND,
-            l.id_for_node_kind("parameter_declaration", true)
-        );
-        assert_eq!(
-            TYPE_IDENTIFIER_KIND,
-            l.id_for_node_kind("type_identifier", true)
-        );
-        assert_eq!(PREPROC_DEF_KIND, l.id_for_node_kind("preproc_def", true));
-        assert_eq!(
-            PREPROC_FUNCTION_DEF_KIND,
-            l.id_for_node_kind("preproc_function_def", true)
-        );
-        assert_eq!(STATIC_KEYWORD_KIND, l.id_for_node_kind("static", false));
+        for (kind_id, kind, named) in [
+            (IDENTIFIER_KIND, "identifier", true),
+            (STATIC_KEYWORD_KIND, "static", false),
+            (LEFT_BRACKET_KIND, "[", false),
+            (RIGHT_BRACKET_KIND, "]", false),
+            (EQUALS_KIND, "=", false),
+            (PREPROC_DEF_KIND, "preproc_def", true),
+            (PREPROC_FUNCTION_DEF_KIND, "preproc_function_def", true),
+            (PREPROC_PARAMS_KIND, "preproc_params", true),
+            (FUNCTION_DEFINITION_KIND, "function_definition", true),
+            (DECLARATION_KIND, "declaration", true),
+            (TYPE_DEFINITION_KIND, "type_definition", true),
+            (FUNCTION_DECLARATOR_KIND, "function_declarator", true),
+            (ENUM_SPECIFIER_KIND, "enum_specifier", true),
+            (STRUCT_SPECIFIER_KIND, "struct_specifier", true),
+            (UNION_SPECIFIER_KIND, "union_specifier", true),
+            (FIELD_DECLARATION_KIND, "field_declaration", true),
+            (ENUMERATOR_KIND, "enumerator", true),
+            (PARAMETER_DECLARATION_KIND, "parameter_declaration", true),
+            (TYPE_IDENTIFIER_KIND, "type_identifier", true),
+        ] {
+            let actual_kind_id = l.id_for_node_kind(kind, named);
+            assert_eq!(
+                kind_id, actual_kind_id,
+                "node id for {kind:?} is {actual_kind_id} (not {kind_id})"
+            );
+        }
     }
 
     const BTREE_C: &str = include_str!("../../tests/btree.c");
