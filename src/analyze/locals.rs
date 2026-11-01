@@ -6,10 +6,8 @@ use itertools::Itertools;
 
 use crate::{
     analyze::{
-        DECLARATION_KIND, FUNCTION_DECLARATOR_KIND, FUNCTION_DEFINITION_KIND, IDENTIFIER_KIND,
-        PARAMETER_DECLARATION_KIND, PREPROC_DEF_KIND, PREPROC_FUNCTION_DEF_KIND,
         types::{Ident, SymbolKind},
-        walk::walk_preorder,
+        walk::{Scope, walk_symbols},
     },
     text::{PositionEncoding, PositionRange},
 };
@@ -49,15 +47,6 @@ impl Locals {
     }
 }
 
-enum State {
-    Start,
-    VarDef,
-    FnDef { new_scope: PositionRange },
-    FnDefName { new_scope: PositionRange },
-    Macro,
-    FunctionMacro,
-}
-
 fn collect_symbols(
     root: tree_sitter::Node,
     source: &BytesStr,
@@ -66,97 +55,30 @@ fn collect_symbols(
 ) {
     let root_range = PositionRange::from_ts(root.range(), source, encoding);
 
-    let mut state = State::Start;
-    let mut scope = root_range;
-    for node in walk_preorder(root) {
-        let kind = node.kind_id();
-        let range = PositionRange::from_ts(node.range(), source, encoding);
+    for symbol in walk_symbols(root) {
+        let name_range = PositionRange::from_ts(symbol.range, source, encoding);
+        let name = source
+            .slice(symbol.range.start_byte..symbol.range.end_byte)
+            .into_bytes();
 
-        if !scope.contains(range) {
-            scope = root_range;
+        if symbol.definition {
+            let scope = if let Scope::Block(range) = symbol.scope {
+                PositionRange::from_ts(range, source, encoding)
+            } else {
+                root_range
+            };
+
+            locals
+                .definitions
+                .entry(name.clone())
+                .or_default()
+                .push(Definition {
+                    name: name_range,
+                    scope,
+                    kind: symbol.kind,
+                });
         }
 
-        match kind {
-            IDENTIFIER_KIND => {
-                let name = source.slice(node.byte_range()).into_bytes();
-                locals.symbols.entry(name.clone()).or_default().push(range);
-
-                match state {
-                    State::VarDef => {
-                        locals
-                            .definitions
-                            .entry(name)
-                            .or_default()
-                            .push(Definition {
-                                name: range,
-                                scope,
-                                kind: SymbolKind::Variable,
-                            });
-
-                        state = State::Start;
-                    }
-                    State::FnDefName { new_scope } => {
-                        locals
-                            .definitions
-                            .entry(name)
-                            .or_default()
-                            .push(Definition {
-                                name: range,
-                                scope,
-                                kind: SymbolKind::Function,
-                            });
-
-                        state = State::Start;
-                        scope = new_scope;
-                    }
-                    State::Macro => {
-                        locals
-                            .definitions
-                            .entry(name)
-                            .or_default()
-                            .push(Definition {
-                                name: range,
-                                scope,
-                                kind: SymbolKind::Macro,
-                            });
-
-                        state = State::Start;
-                    }
-                    State::FunctionMacro => {
-                        locals
-                            .definitions
-                            .entry(name)
-                            .or_default()
-                            .push(Definition {
-                                name: range,
-                                scope,
-                                kind: SymbolKind::FunctionMacro,
-                            });
-
-                        state = State::Start;
-                    }
-                    _ => {}
-                }
-            }
-            DECLARATION_KIND | PARAMETER_DECLARATION_KIND => {
-                state = State::VarDef;
-            }
-            FUNCTION_DEFINITION_KIND => {
-                state = State::FnDef { new_scope: range };
-            }
-            FUNCTION_DECLARATOR_KIND => match state {
-                State::FnDef { new_scope } => {
-                    state = State::FnDefName { new_scope };
-                }
-                _ => {}
-            },
-            PREPROC_DEF_KIND => {
-                state = State::Macro;
-            }
-            PREPROC_FUNCTION_DEF_KIND => {
-                state = State::FunctionMacro;
-            }
-            _ => {}
-        }
+        locals.symbols.entry(name).or_default().push(name_range);
     }
 }

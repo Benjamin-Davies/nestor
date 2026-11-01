@@ -47,6 +47,7 @@ fn with_parser<T>(f: impl FnOnce(&mut Parser) -> T) -> T {
 }
 
 pub const IDENTIFIER_KIND: u16 = 1;
+pub const STATIC_KEYWORD_KIND: u16 = 71;
 pub const PREPROC_DEF_KIND: u16 = 165;
 pub const PREPROC_FUNCTION_DEF_KIND: u16 = 166;
 pub const FUNCTION_DEFINITION_KIND: u16 = 196;
@@ -111,7 +112,7 @@ mod tests {
     use crate::analyze::{
         DECLARATION_KIND, FUNCTION_DECLARATOR_KIND, FUNCTION_DEFINITION_KIND, IDENTIFIER_KIND,
         PARAMETER_DECLARATION_KIND, PREPROC_DEF_KIND, PREPROC_FUNCTION_DEF_KIND,
-        STORAGE_CLASS_SPECIFIER_KIND, TYPE_IDENTIFIER_KIND, language, parse,
+        STATIC_KEYWORD_KIND, STORAGE_CLASS_SPECIFIER_KIND, TYPE_IDENTIFIER_KIND, language, parse,
     };
 
     #[test]
@@ -144,6 +145,7 @@ mod tests {
             PREPROC_FUNCTION_DEF_KIND,
             l.id_for_node_kind("preproc_function_def", true)
         );
+        assert_eq!(STATIC_KEYWORD_KIND, l.id_for_node_kind("static", false));
     }
 
     const BTREE_C: &str = include_str!("../../tests/btree.c");
