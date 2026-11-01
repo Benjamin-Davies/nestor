@@ -1,7 +1,7 @@
 use crate::analyze::{
     DECLARATION_KIND, FUNCTION_DECLARATOR_KIND, FUNCTION_DEFINITION_KIND, IDENTIFIER_KIND,
     PARAMETER_DECLARATION_KIND, PREPROC_DEF_KIND, PREPROC_FUNCTION_DEF_KIND, STATIC_KEYWORD_KIND,
-    types::SymbolKind,
+    TYPE_IDENTIFIER_KIND, types::SymbolKind,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -162,6 +162,16 @@ pub fn walk_symbols(node: tree_sitter::Node) -> impl Iterator<Item = Symbol> {
                 state = State::FunctionMacro;
 
                 None
+            }
+            TYPE_IDENTIFIER_KIND => {
+                let symbol = Symbol {
+                    range,
+                    definition: false,
+                    scope,
+                    kind: SymbolKind::Type,
+                };
+
+                Some(symbol)
             }
             _ => None,
         }
