@@ -1,6 +1,7 @@
 use std::{
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
+    time::Instant,
 };
 
 use anyhow::Context;
@@ -243,8 +244,16 @@ fn load_files(load_queue_rx: Receiver<LoadCommand>, encoding: PositionEncoding) 
     while let Some(load_command) = stack.pop().or_else(|| load_queue_rx.recv().ok()) {
         match load_command {
             LoadCommand::LoadRoot(path, root_data) => {
+                let start = Instant::now();
+
                 let mut symbols = dirs::analyze(&path, encoding);
-                tracing::info!("Analyzed {path:?}: {}", symbols.len());
+
+                let stop = Instant::now();
+                tracing::info!(
+                    "Analyzed {path:?}: {} symbols in {:.3} seconds",
+                    symbols.len(),
+                    (stop - start).as_secs_f32()
+                );
 
                 symbols.sort();
                 let mut root_data = root_data.lock().expect("failed to lock root data");
