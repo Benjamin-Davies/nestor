@@ -1,13 +1,18 @@
-use std::{
-    io::{self, Write},
-    sync::OnceLock,
-};
+use std::{fmt, sync::OnceLock};
 
 use crossbeam_channel::Sender;
 use lsp_types::{LogMessageParams, MessageType};
-use tracing::level_filters::LevelFilter;
+use tracing::{
+    Subscriber,
+    field::{Field, Visit},
+    level_filters::LevelFilter,
+};
 use tracing_subscriber::{
-    fmt::{self, MakeWriter},
+    fmt::{
+        format::Writer,
+        time::{FormatTime, SystemTime},
+    },
+    layer::Layer,
     prelude::*,
 };
 
@@ -15,49 +20,68 @@ use crate::messages::Notification;
 
 static LSP_SENDER: OnceLock<Sender<lsp_server::Message>> = OnceLock::new();
 
-struct LogWriter;
+struct LspLayer;
 
-impl Write for LogWriter {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+impl<S: Subscriber> Layer<S> for LspLayer {
+    fn on_event(&self, event: &tracing::Event, _ctx: tracing_subscriber::layer::Context<S>) {
+        let level = *event.metadata().level();
+
+        let mut visitor = MessageVisitor::default();
+        event.record(&mut visitor);
+        let message = visitor.message.unwrap_or_default();
+
+        let message = format!("[{Now} {level}] {message}");
+
         if let Some(sender) = LSP_SENDER.get() {
-            let message = String::from_utf8_lossy(buf).into_owned();
-
             let _ = sender.send(
                 Notification::LogMessage(LogMessageParams {
-                    typ: MessageType::LOG,
+                    typ: level_to_message_type(level),
                     message,
                 })
                 .into(),
             );
+        } else {
+            eprintln!("{message}");
         }
-
-        Ok(buf.len())
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        Ok(())
     }
 }
 
-struct MakeLogWriter;
+fn level_to_message_type(level: tracing::Level) -> MessageType {
+    if level <= tracing::Level::ERROR {
+        MessageType::ERROR
+    } else if level <= tracing::Level::WARN {
+        MessageType::WARNING
+    } else if level <= tracing::Level::INFO {
+        MessageType::INFO
+    } else {
+        MessageType::LOG
+    }
+}
 
-impl<'a> MakeWriter<'a> for MakeLogWriter {
-    type Writer = LogWriter;
+#[derive(Default)]
+struct MessageVisitor {
+    message: Option<String>,
+}
 
-    fn make_writer(&'a self) -> Self::Writer {
-        LogWriter
+impl Visit for MessageVisitor {
+    fn record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) {
+        if field.name() == "message" {
+            self.message = Some(format!("{:?}", value));
+        }
+    }
+}
+
+struct Now;
+
+impl fmt::Display for Now {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        SystemTime.format_time(&mut Writer::new(f))
     }
 }
 
 pub fn init(max_level: tracing::Level) {
-    let fmt_layer = fmt::layer()
-        .with_writer(MakeLogWriter)
-        .with_ansi(false)
-        .with_level(true)
-        .with_target(true);
-
     tracing_subscriber::registry()
-        .with(fmt_layer.with_filter(LevelFilter::from_level(max_level)))
+        .with(LspLayer.with_filter(LevelFilter::from_level(max_level)))
         .init();
 }
 
