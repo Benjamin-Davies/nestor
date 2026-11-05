@@ -17914,6 +17914,11 @@ Locals {
                 scope: 6519:0-6827:1,
                 kind: Variable,
             },
+            Definition {
+                name: 10869:18-10869:20,
+                scope: 10860:0-11125:1,
+                kind: Variable,
+            },
         ],
         b"data": [
             Definition {
@@ -21243,6 +21248,11 @@ Locals {
             },
             Definition {
                 name: 2546:12-2546:15,
+                scope: 2538:0-2831:1,
+                kind: Variable,
+            },
+            Definition {
+                name: 2762:49-2762:52,
                 scope: 2538:0-2831:1,
                 kind: Variable,
             },

@@ -214,3 +214,5 @@ enum Foo {
   BAR,
   BAZ,
 };
+
+static int aa, ab[ac] = ad, ae = af;

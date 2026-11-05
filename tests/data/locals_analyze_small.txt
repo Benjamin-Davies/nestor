@@ -124,6 +124,24 @@ Locals {
             121:34-121:35,
             122:27-122:28,
         ],
+        b"aa": [
+            218:11-218:13,
+        ],
+        b"ab": [
+            218:15-218:17,
+        ],
+        b"ac": [
+            218:18-218:20,
+        ],
+        b"ad": [
+            218:24-218:26,
+        ],
+        b"ae": [
+            218:28-218:30,
+        ],
+        b"af": [
+            218:33-218:35,
+        ],
         b"b": [
             117:38-117:39,
             118:36-118:37,
@@ -303,137 +321,158 @@ Locals {
         b"BAR": [
             Definition {
                 name: 214:2-214:5,
-                scope: 1:0-217:0,
+                scope: 1:0-219:0,
                 kind: Variable,
             },
         ],
         b"BAZ": [
             Definition {
                 name: 215:2-215:5,
-                scope: 1:0-217:0,
+                scope: 1:0-219:0,
                 kind: Variable,
             },
         ],
         b"BTALLOC_ANY": [
             Definition {
                 name: 59:8-59:19,
-                scope: 1:0-217:0,
+                scope: 1:0-219:0,
                 kind: Macro,
             },
         ],
         b"BTALLOC_EXACT": [
             Definition {
                 name: 60:8-60:21,
-                scope: 1:0-217:0,
+                scope: 1:0-219:0,
                 kind: Macro,
             },
         ],
         b"BTALLOC_LE": [
             Definition {
                 name: 61:8-61:18,
-                scope: 1:0-217:0,
+                scope: 1:0-219:0,
                 kind: Macro,
             },
         ],
         b"CellArray": [
             Definition {
                 name: 202:15-202:24,
-                scope: 1:0-217:0,
+                scope: 1:0-219:0,
                 kind: Type,
             },
             Definition {
                 name: 202:25-202:34,
-                scope: 1:0-217:0,
+                scope: 1:0-219:0,
                 kind: Type,
             },
             Definition {
                 name: 203:7-203:16,
-                scope: 1:0-217:0,
+                scope: 1:0-219:0,
                 kind: Type,
             },
         ],
         b"FOO": [
             Definition {
                 name: 213:2-213:5,
-                scope: 1:0-217:0,
+                scope: 1:0-219:0,
                 kind: Variable,
             },
         ],
         b"Foo": [
             Definition {
                 name: 212:5-212:8,
-                scope: 1:0-217:0,
+                scope: 1:0-219:0,
                 kind: Type,
             },
         ],
         b"IfNotOmitAV": [
             Definition {
                 name: 70:8-70:19,
-                scope: 1:0-217:0,
+                scope: 1:0-219:0,
                 kind: FunctionMacro,
             },
             Definition {
                 name: 72:8-72:19,
-                scope: 1:0-217:0,
+                scope: 1:0-219:0,
                 kind: FunctionMacro,
             },
         ],
         b"SHARED_LOCK_TRACE": [
             Definition {
                 name: 168:8-168:25,
-                scope: 1:0-217:0,
+                scope: 1:0-219:0,
                 kind: FunctionMacro,
             },
         ],
         b"SQLITE_CORRUPT_PAGE": [
             Definition {
                 name: 159:9-159:28,
-                scope: 1:0-217:0,
+                scope: 1:0-219:0,
                 kind: FunctionMacro,
             },
             Definition {
                 name: 161:9-161:28,
-                scope: 1:0-217:0,
+                scope: 1:0-219:0,
                 kind: FunctionMacro,
             },
         ],
         b"SQLITE_WSD": [
             Definition {
                 name: 87:17-87:27,
-                scope: 1:0-217:0,
+                scope: 1:0-219:0,
                 kind: Variable,
             },
         ],
         b"TRACE": [
             Definition {
                 name: 40:9-40:14,
-                scope: 1:0-217:0,
+                scope: 1:0-219:0,
                 kind: FunctionMacro,
             },
             Definition {
                 name: 42:9-42:14,
-                scope: 1:0-217:0,
+                scope: 1:0-219:0,
                 kind: FunctionMacro,
+            },
+        ],
+        b"aa": [
+            Definition {
+                name: 218:11-218:13,
+                scope: 1:0-219:0,
+                kind: Variable,
+            },
+        ],
+        b"ab": [
+            Definition {
+                name: 218:15-218:17,
+                scope: 1:0-219:0,
+                kind: Variable,
+            },
+        ],
+        b"ae": [
+            Definition {
+                name: 218:28-218:30,
+                scope: 1:0-219:0,
+                kind: Variable,
             },
         ],
         b"clearAllSharedCacheTableLocks": [
             Definition {
                 name: 119:10-119:39,
-                scope: 1:0-217:0,
+                scope: 1:0-219:0,
                 kind: FunctionMacro,
             },
         ],
         b"corruptPageError": [
             Definition {
                 name: 146:4-146:20,
-                scope: 1:0-217:0,
+                scope: 1:0-219:0,
                 kind: Function,
             },
         ],
         b"downgradeAllSharedCacheTableLocks": [
             Definition {
                 name: 120:10-120:43,
-                scope: 1:0-217:0,
+                scope: 1:0-219:0,
                 kind: FunctionMacro,
             },
         ],
@@ -454,21 +493,21 @@ Locals {
         b"get2byteNotZero": [
             Definition {
                 name: 54:8-54:23,
-                scope: 1:0-217:0,
+                scope: 1:0-219:0,
                 kind: FunctionMacro,
             },
         ],
         b"hasReadConflicts": [
             Definition {
                 name: 122:10-122:26,
-                scope: 1:0-217:0,
+                scope: 1:0-219:0,
                 kind: FunctionMacro,
             },
         ],
         b"hasSharedCacheTableLock": [
             Definition {
                 name: 121:10-121:33,
-                scope: 1:0-217:0,
+                scope: 1:0-219:0,
                 kind: FunctionMacro,
             },
         ],
@@ -522,49 +561,49 @@ Locals {
         b"querySharedCacheTableLock": [
             Definition {
                 name: 117:10-117:35,
-                scope: 1:0-217:0,
+                scope: 1:0-219:0,
                 kind: FunctionMacro,
             },
         ],
         b"setSharedCacheTableLock": [
             Definition {
                 name: 118:10-118:33,
-                scope: 1:0-217:0,
+                scope: 1:0-219:0,
                 kind: FunctionMacro,
             },
         ],
         b"sharedLockTrace": [
             Definition {
                 name: 178:12-178:27,
-                scope: 1:0-217:0,
+                scope: 1:0-219:0,
                 kind: Function,
             },
         ],
         b"sqlite3BtreeSeekCount": [
             Definition {
                 name: 129:15-129:36,
-                scope: 1:0-217:0,
+                scope: 1:0-219:0,
                 kind: Function,
             },
         ],
         b"sqlite3BtreeTrace": [
             Definition {
                 name: 39:4-39:21,
-                scope: 1:0-217:0,
+                scope: 1:0-219:0,
                 kind: Variable,
             },
         ],
         b"sqlite3_enable_shared_cache": [
             Definition {
                 name: 99:4-99:31,
-                scope: 1:0-217:0,
+                scope: 1:0-219:0,
                 kind: Function,
             },
         ],
         b"zMagicHeader": [
             Definition {
                 name: 32:18-32:30,
-                scope: 1:0-217:0,
+                scope: 1:0-219:0,
                 kind: Variable,
             },
         ],

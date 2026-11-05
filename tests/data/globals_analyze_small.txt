@@ -133,6 +133,12 @@ Globals {
         "FOO": variable (213:2-213:5),
         "BAR": variable (214:2-214:5),
         "BAZ": variable (215:2-215:5),
+        "aa": variable (218:11-218:13),
+        "ab": variable (218:15-218:17),
+        "ac": ?? (218:18-218:20),
+        "ad": ?? (218:24-218:26),
+        "ae": variable (218:28-218:30),
+        "af": ?? (218:33-218:35),
     ],
     type_symbols: [
         "BtShared": type (87:7-87:15),

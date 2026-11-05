@@ -168,6 +168,8 @@ pub fn walk_symbols<'a>(node: tree_sitter::Node<'a>) -> impl Iterator<Item = Sym
             EQUALS_KIND => {
                 match state {
                     State::VarDef => {
+                        // Pop this once we've left the init_declarator
+                        stack.push((state, scope, depth - 1));
                         state = State::Start;
                     }
                     _ => {}
