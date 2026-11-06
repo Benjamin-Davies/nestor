@@ -4,17 +4,15 @@ macro_rules! kind {
     ($ident:ident, $test_ident:ident, $kind:expr, $named:literal, $kind_id:literal) => {
         pub const $ident: u16 = $kind_id;
 
-        paste! {
-            #[test]
-            fn $test_ident() {
-                let l = crate::analyze::language();
-                let actual_kind_id = l.id_for_node_kind($kind, $named);
-                assert_eq!(
-                    $kind_id, actual_kind_id,
-                    "node id for {:?} is {} (not {})",
-                    $kind, actual_kind_id, $kind_id,
-                );
-            }
+        #[test]
+        fn $test_ident() {
+            let l = crate::analyze::language();
+            let actual_kind_id = l.id_for_node_kind($kind, $named);
+            assert_eq!(
+                $kind_id, actual_kind_id,
+                "node id for {:?} is {} (not {})",
+                $kind, actual_kind_id, $kind_id,
+            );
         }
     };
 }
@@ -62,5 +60,6 @@ kinds! {
     field_declaration = 253;
     enumerator = 256;
     parameter_declaration = 260;
+    field_identifier = 360;
     type_identifier = 362;
 }

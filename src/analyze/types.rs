@@ -4,7 +4,7 @@ use bytes::Bytes;
 use tree_sitter::Node;
 
 use crate::{
-    analyze::{IDENTIFIER_KIND, TYPE_IDENTIFIER_KIND},
+    analyze::{FIELD_IDENTIFIER_KIND, IDENTIFIER_KIND, TYPE_IDENTIFIER_KIND},
     text::{PositionEncoding, PositionRange},
 };
 
@@ -23,6 +23,8 @@ pub enum SymbolKind {
     Variable,
     Function,
     Type,
+    Field,
+    EnumVariant,
     Macro,
     FunctionMacro,
     /// These are never actually stored, just used for completions.
@@ -32,16 +34,16 @@ pub enum SymbolKind {
 impl Ident {
     pub fn from_node(node: Node, source: &Bytes, encoding: PositionEncoding) -> Self {
         let bytes = source.slice(node.byte_range());
-        let ts_kind = node.kind_id();
-        debug_assert!(matches!(ts_kind, IDENTIFIER_KIND | TYPE_IDENTIFIER_KIND));
+        let kind = match node.kind_id() {
+            FIELD_IDENTIFIER_KIND => SymbolKind::Type,
+            TYPE_IDENTIFIER_KIND => SymbolKind::Type,
+            IDENTIFIER_KIND => SymbolKind::Unknown,
+            _ => unreachable!(),
+        };
         Self {
             bytes,
             range: PositionRange::from_ts_bytes(node.range(), source, encoding),
-            kind: if ts_kind == TYPE_IDENTIFIER_KIND {
-                SymbolKind::Type
-            } else {
-                SymbolKind::Unknown
-            },
+            kind,
         }
     }
 
@@ -61,6 +63,8 @@ impl SymbolKind {
             SymbolKind::Variable => "variable",
             SymbolKind::Function => "function",
             SymbolKind::Type => "type",
+            SymbolKind::Field => "field",
+            SymbolKind::EnumVariant => "enum variant",
             SymbolKind::Macro => "macro",
             SymbolKind::FunctionMacro => "function macro",
             SymbolKind::Keyword => "keyword",
@@ -76,6 +80,8 @@ impl From<SymbolKind> for Option<lsp_types::CompletionItemKind> {
             SymbolKind::Variable => Some(K::VARIABLE),
             SymbolKind::Function => Some(K::FUNCTION),
             SymbolKind::Type => Some(K::CLASS),
+            SymbolKind::Field => Some(K::FIELD),
+            SymbolKind::EnumVariant => Some(K::ENUM_MEMBER),
             SymbolKind::Macro => Some(K::CONSTANT),
             SymbolKind::FunctionMacro => Some(K::FUNCTION),
             SymbolKind::Keyword => Some(K::KEYWORD),

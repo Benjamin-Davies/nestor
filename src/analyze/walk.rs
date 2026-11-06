@@ -1,9 +1,9 @@
 use crate::analyze::{
     DECLARATION_KIND, ENUM_SPECIFIER_KIND, ENUMERATOR_KIND, EQUALS_KIND, FIELD_DECLARATION_KIND,
-    FUNCTION_DECLARATOR_KIND, FUNCTION_DEFINITION_KIND, IDENTIFIER_KIND, LEFT_BRACKET_KIND,
-    PARAMETER_DECLARATION_KIND, PREPROC_DEF_KIND, PREPROC_FUNCTION_DEF_KIND, PREPROC_PARAMS_KIND,
-    RIGHT_BRACKET_KIND, STATIC_KEYWORD_KIND, STRUCT_SPECIFIER_KIND, TYPE_DEFINITION_KIND,
-    TYPE_IDENTIFIER_KIND, UNION_SPECIFIER_KIND, types::SymbolKind,
+    FIELD_IDENTIFIER_KIND, FUNCTION_DECLARATOR_KIND, FUNCTION_DEFINITION_KIND, IDENTIFIER_KIND,
+    LEFT_BRACKET_KIND, PARAMETER_DECLARATION_KIND, PREPROC_DEF_KIND, PREPROC_FUNCTION_DEF_KIND,
+    PREPROC_PARAMS_KIND, RIGHT_BRACKET_KIND, STATIC_KEYWORD_KIND, STRUCT_SPECIFIER_KIND,
+    TYPE_DEFINITION_KIND, TYPE_IDENTIFIER_KIND, UNION_SPECIFIER_KIND, types::SymbolKind,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -31,6 +31,7 @@ enum State {
     Macro,
     FunctionMacro { new_scope: tree_sitter::Range },
     TypeDef,
+    EnumVariantDef,
 }
 
 /// Iterates over the descendants of a node and their depths in pre-order,
@@ -126,6 +127,14 @@ pub fn walk_symbols<'a>(node: tree_sitter::Node<'a>) -> impl Iterator<Item = Sym
                         state = State::Start;
                         scope = Scope::Block(new_scope);
                     }
+                    State::EnumVariantDef => {
+                        symbol = Symbol {
+                            node,
+                            definition: true,
+                            scope,
+                            kind: SymbolKind::EnumVariant,
+                        };
+                    }
                     _ => {
                         symbol = Symbol {
                             node,
@@ -167,7 +176,7 @@ pub fn walk_symbols<'a>(node: tree_sitter::Node<'a>) -> impl Iterator<Item = Sym
             }
             EQUALS_KIND => {
                 match state {
-                    State::VarDef => {
+                    State::VarDef | State::EnumVariantDef => {
                         // Pop this once we've left the init_declarator
                         stack.push((state, scope, depth - 1));
                         state = State::Start;
@@ -177,12 +186,15 @@ pub fn walk_symbols<'a>(node: tree_sitter::Node<'a>) -> impl Iterator<Item = Sym
 
                 None
             }
-            DECLARATION_KIND
-            | PARAMETER_DECLARATION_KIND
-            | FIELD_DECLARATION_KIND
-            | ENUMERATOR_KIND => {
+            DECLARATION_KIND | PARAMETER_DECLARATION_KIND | FIELD_DECLARATION_KIND => {
                 stack.push((state, scope, depth));
                 state = State::VarDef;
+
+                None
+            }
+            ENUMERATOR_KIND => {
+                stack.push((state, scope, depth));
+                state = State::EnumVariantDef;
 
                 None
             }
@@ -218,6 +230,29 @@ pub fn walk_symbols<'a>(node: tree_sitter::Node<'a>) -> impl Iterator<Item = Sym
                 state = State::Start;
 
                 None
+            }
+            FIELD_IDENTIFIER_KIND => {
+                let symbol;
+                match state {
+                    State::VarDef => {
+                        symbol = Symbol {
+                            node,
+                            definition: true,
+                            scope,
+                            kind: SymbolKind::Field,
+                        };
+                    }
+                    _ => {
+                        symbol = Symbol {
+                            node,
+                            definition: false,
+                            scope,
+                            kind: SymbolKind::Field,
+                        };
+                    }
+                }
+
+                Some(symbol)
             }
             TYPE_IDENTIFIER_KIND => {
                 let symbol;
