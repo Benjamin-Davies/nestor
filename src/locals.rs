@@ -13,7 +13,7 @@ use lsp_types::Uri;
 
 use crate::{
     analyze::{
-        IDENTIFIER_KIND, TYPE_IDENTIFIER_KIND, locals, parse,
+        FIELD_IDENTIFIER_KIND, IDENTIFIER_KIND, TYPE_IDENTIFIER_KIND, locals, parse,
         types::{Ident, SymbolKind},
     },
     text::{
@@ -174,7 +174,7 @@ impl Document {
             .root_node()
             .descendant_for_byte_range(byte, byte)?;
 
-        if let IDENTIFIER_KIND | TYPE_IDENTIFIER_KIND = node.kind_id() {
+        if let IDENTIFIER_KIND | FIELD_IDENTIFIER_KIND | TYPE_IDENTIFIER_KIND = node.kind_id() {
             Some(node)
         } else {
             None
