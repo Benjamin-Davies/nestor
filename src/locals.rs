@@ -166,7 +166,7 @@ impl Document {
         self.source.to_bytes()
     }
 
-    pub fn ident_at(&self, pos: Position) -> Option<tree_sitter::Node<'_>> {
+    pub fn ident_at(&self, pos: Position) -> Option<Ident> {
         let (byte, _) = pos.to_ts(&self.source, self.encoding);
 
         let node = self
@@ -175,7 +175,8 @@ impl Document {
             .descendant_for_byte_range(byte, byte)?;
 
         if let IDENTIFIER_KIND | FIELD_IDENTIFIER_KIND | TYPE_IDENTIFIER_KIND = node.kind_id() {
-            Some(node)
+            let ident = Ident::from_node(node, &self.source.to_bytes(), self.encoding);
+            Some(ident)
         } else {
             None
         }
@@ -183,8 +184,8 @@ impl Document {
 
     /// Returns the locations of the references we found and a boolean
     /// to indicate if the symbol is a local variable.
-    pub fn find_references(&self, ident: tree_sitter::Node) -> (Vec<PositionRange>, bool) {
-        let ident = Ident::from_node(ident, &self.source.to_bytes(), self.encoding);
+    pub fn find_references(&self, ident: &Ident) -> (Vec<PositionRange>, bool) {
+        let class = ident.kind.class();
 
         let symbols = self.locals.symbols.get(&ident.bytes);
 
@@ -197,18 +198,25 @@ impl Document {
                 .into_iter()
                 .flatten()
                 .copied()
-                .filter(|&s| definitions.iter().any(|d| d.scope.contains(s)))
+                .filter(|s| {
+                    s.class == class && definitions.iter().any(|d| d.scope.contains(s.name))
+                })
+                .map(|s| s.name)
                 .collect();
             (matches, true)
         } else {
-            let matches = symbols.cloned().unwrap_or_default();
+            let matches = symbols
+                .into_iter()
+                .flatten()
+                .copied()
+                .filter(|s| s.class == class)
+                .map(|s| s.name)
+                .collect();
             (matches, false)
         }
     }
 
-    pub fn find_definitions(&self, ident: tree_sitter::Node) -> Vec<PositionRange> {
-        let ident = Ident::from_node(ident, &self.source.to_bytes(), self.encoding);
-
+    pub fn find_definitions(&self, ident: &Ident) -> Vec<PositionRange> {
         let definitions = self.locals.definitions(ident);
 
         definitions.into_iter().map(|d| d.name).collect()

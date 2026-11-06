@@ -106,24 +106,6 @@ pub fn analyze_file(
             kind: ident.kind,
         });
     }
-    for ident in globals.type_definitions {
-        symbols.push(Symbol {
-            name: ident.bytes,
-            path: path.clone(),
-            range: ident.range,
-            is_definition: true,
-            kind: ident.kind,
-        });
-    }
-    for ident in globals.type_symbols {
-        symbols.push(Symbol {
-            name: ident.bytes,
-            path: path.clone(),
-            range: ident.range,
-            is_definition: false,
-            kind: ident.kind,
-        });
-    }
 
     consolidate_symbols(&mut symbols);
 

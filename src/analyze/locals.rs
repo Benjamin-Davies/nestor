@@ -6,7 +6,7 @@ use itertools::Itertools;
 
 use crate::{
     analyze::{
-        types::{Ident, SymbolKind},
+        types::{Ident, SymbolClass, SymbolKind},
         walk::{Scope, walk_symbols},
     },
     text::{PositionEncoding, PositionRange},
@@ -14,11 +14,17 @@ use crate::{
 
 #[derive(Debug, Default)]
 pub struct Locals {
-    pub symbols: BTreeMap<Bytes, Vec<PositionRange>>,
+    pub symbols: BTreeMap<Bytes, Vec<Symbol>>,
     pub definitions: BTreeMap<Bytes, Vec<Definition>>,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Symbol {
+    pub name: PositionRange,
+    pub class: SymbolClass,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Definition {
     pub name: PositionRange,
     pub scope: PositionRange,
@@ -33,16 +39,14 @@ pub fn analyze(node: tree_sitter::Node, source: &BytesStr, encoding: PositionEnc
 }
 
 impl Locals {
-    pub fn definitions(&self, ident: Ident) -> Vec<&Definition> {
+    pub fn definitions(&self, ident: &Ident) -> Vec<&Definition> {
         let Some(defs) = self.definitions.get(&ident.bytes) else {
             return Vec::new();
         };
 
+        let class = ident.kind.class();
         defs.iter()
-            .filter(|d| {
-                tracing::info!("{d:?}");
-                d.scope.contains(ident.range)
-            })
+            .filter(|d| d.kind.class() == class && d.scope.contains(ident.range))
             .collect_vec()
     }
 }
@@ -77,6 +81,9 @@ fn collect_symbols(
                 });
         }
 
-        locals.symbols.entry(name).or_default().push(name_range);
+        locals.symbols.entry(name).or_default().push(Symbol {
+            name: name_range,
+            class: symbol.kind.class(),
+        });
     }
 }

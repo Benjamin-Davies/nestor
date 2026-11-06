@@ -11,7 +11,10 @@ use itertools::Itertools;
 use lsp_types::{Uri, WorkspaceFolder};
 
 use crate::{
-    analyze::{dirs, types::SymbolKind},
+    analyze::{
+        dirs,
+        types::{Ident, SymbolKind},
+    },
     text::{PositionEncoding, PositionRange},
     utils::binary_search_range_by_key,
 };
@@ -164,26 +167,27 @@ impl GlobalsStore {
         self.roots.iter_mut().find(|r| path.starts_with(&r.path))
     }
 
-    pub fn find_definitions(&self, name: &str) -> Vec<Symbol> {
-        self.find_symbol(name, true)
+    pub fn find_definitions(&self, ident: &Ident) -> Vec<Symbol> {
+        self.find_symbol(ident, true)
     }
 
-    pub fn find_references(&self, name: &str) -> Vec<Symbol> {
-        self.find_symbol(name, false)
+    pub fn find_references(&self, ident: &Ident) -> Vec<Symbol> {
+        self.find_symbol(ident, false)
     }
 
-    fn find_symbol(&self, name: &str, is_definition: bool) -> Vec<Symbol> {
+    fn find_symbol(&self, ident: &Ident, is_definition: bool) -> Vec<Symbol> {
+        let class = ident.kind.class();
         let mut symbols = Vec::new();
         for root in &self.roots {
             let root_data = root.data.lock().expect("failed to lock root data");
             let root_symbols = root_data
-                .find_symbol(name)
+                .find_symbol(&ident.bytes)
                 .iter()
                 .inspect(|s| {
                     // This should always be the case, but check just in case.
-                    debug_assert_eq!(s.name, name);
+                    debug_assert_eq!(s.name, ident.bytes);
                 })
-                .filter(|s| s.is_definition == is_definition)
+                .filter(|s| s.kind.class() == class && s.is_definition == is_definition)
                 .filter_map(|s| {
                     s.try_into()
                         .inspect_err(|err| tracing::warn!("Error finding symbol: {err}"))
@@ -216,9 +220,8 @@ impl GlobalsStore {
 }
 
 impl RootData {
-    fn find_symbol(&self, name: &str) -> &[dirs::Symbol] {
-        let range =
-            binary_search_range_by_key(&self.symbols, &name.as_bytes(), |symbol| &symbol.name);
+    fn find_symbol(&self, name: &[u8]) -> &[dirs::Symbol] {
+        let range = binary_search_range_by_key(&self.symbols, &name, |symbol| &symbol.name);
 
         &self.symbols[range]
     }

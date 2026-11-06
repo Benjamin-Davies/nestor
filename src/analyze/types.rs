@@ -4,7 +4,7 @@ use bytes::Bytes;
 use tree_sitter::Node;
 
 use crate::{
-    analyze::{FIELD_IDENTIFIER_KIND, IDENTIFIER_KIND, TYPE_IDENTIFIER_KIND},
+    analyze::{FIELD_IDENTIFIER_KIND, TYPE_IDENTIFIER_KIND},
     text::{PositionEncoding, PositionRange},
 };
 
@@ -31,15 +31,18 @@ pub enum SymbolKind {
     Keyword,
 }
 
+/// Groups of SymbolKinds, distinguishable just by looking at the usage.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SymbolClass {
+    Type,
+    Field,
+    Other,
+}
+
 impl Ident {
     pub fn from_node(node: Node, source: &Bytes, encoding: PositionEncoding) -> Self {
         let bytes = source.slice(node.byte_range());
-        let kind = match node.kind_id() {
-            FIELD_IDENTIFIER_KIND => SymbolKind::Type,
-            TYPE_IDENTIFIER_KIND => SymbolKind::Type,
-            IDENTIFIER_KIND => SymbolKind::Unknown,
-            _ => unreachable!(),
-        };
+        let kind = SymbolClass::for_ident(node).into();
         Self {
             bytes,
             range: PositionRange::from_ts_bytes(node.range(), source, encoding),
@@ -68,6 +71,34 @@ impl SymbolKind {
             SymbolKind::Macro => "macro",
             SymbolKind::FunctionMacro => "function macro",
             SymbolKind::Keyword => "keyword",
+        }
+    }
+
+    pub fn class(self) -> SymbolClass {
+        match self {
+            SymbolKind::Type => SymbolClass::Type,
+            SymbolKind::Field => SymbolClass::Field,
+            _ => SymbolClass::Other,
+        }
+    }
+}
+
+impl SymbolClass {
+    pub fn for_ident(node: Node) -> Self {
+        match node.kind_id() {
+            TYPE_IDENTIFIER_KIND => SymbolClass::Type,
+            FIELD_IDENTIFIER_KIND => SymbolClass::Field,
+            _ => SymbolClass::Other,
+        }
+    }
+}
+
+impl From<SymbolClass> for SymbolKind {
+    fn from(value: SymbolClass) -> Self {
+        match value {
+            SymbolClass::Type => SymbolKind::Type,
+            SymbolClass::Field => SymbolKind::Field,
+            SymbolClass::Other => SymbolKind::Unknown,
         }
     }
 }

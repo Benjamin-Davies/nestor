@@ -59,7 +59,6 @@ fn test_analyze_locals_small() {
 }
 
 fn assert_expected(key: &str, value: impl fmt::Debug) {
-    dbg!(key);
     let path = format!("tests/data/{key}.txt");
     let contents = format!("{value:#?}");
 

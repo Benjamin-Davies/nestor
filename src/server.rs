@@ -278,8 +278,9 @@ impl Server {
         let ident = document
             .ident_at(position.into())
             .context("No ident at cursor")?;
+        tracing::warn!("{ident:?}");
 
-        let definitions = document.find_definitions(ident);
+        let definitions = document.find_definitions(&ident);
         let locations = definitions
             .into_iter()
             .map(|range| Location {
@@ -291,9 +292,7 @@ impl Server {
             return Ok(locations);
         }
 
-        let global_definitions = self
-            .globals_store
-            .find_definitions(&document.text_for(ident));
+        let global_definitions = self.globals_store.find_definitions(&ident);
         let global_locations = global_definitions
             .into_iter()
             .filter(|s| &s.uri != uri)
@@ -312,7 +311,7 @@ impl Server {
             .ident_at(position.into())
             .context("No ident at cursor")?;
 
-        let (references, is_local) = document.find_references(ident);
+        let (references, is_local) = document.find_references(&ident);
         let mut locations = references
             .into_iter()
             .map(|range| Location {
@@ -325,9 +324,7 @@ impl Server {
             return Ok(locations);
         }
 
-        let global_references = self
-            .globals_store
-            .find_references(&document.text_for(ident));
+        let global_references = self.globals_store.find_references(&ident);
         locations.extend(
             global_references
                 .into_iter()
