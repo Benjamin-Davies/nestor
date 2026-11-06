@@ -54,6 +54,7 @@ kinds! {
     declaration = 198;
     type_definition = 199;
     function_declarator = 230;
+    array_declarator = 236;
     enum_specifier = 247;
     struct_specifier = 249;
     union_specifier = 250;

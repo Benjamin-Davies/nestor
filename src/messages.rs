@@ -1,4 +1,4 @@
-use lsp_types::{CompletionList, GotoDefinitionResponse, Location};
+use lsp_types::{CompletionList, GotoDefinitionResponse, Hover, Location};
 use serde::Serialize;
 
 macro_rules! define_request {
@@ -141,12 +141,14 @@ define_request! {
     Shutdown = "shutdown",
     GotoDefinition(GotoDefinitionParams) = "textDocument/definition",
     FindReferences(ReferenceParams) = "textDocument/references",
+    Hover(HoverParams) = "textDocument/hover",
     Completion(CompletionParams) = "textDocument/completion",
 }
 
 define_response! {
     GotoDefinition(GotoDefinitionResponse),
     Locations(Vec<Location>),
+    Hover(Option<Hover>),
     CompletionList(CompletionList),
 }
 

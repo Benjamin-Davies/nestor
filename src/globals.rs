@@ -1,4 +1,6 @@
 use std::{
+    collections::{BTreeMap, btree_map},
+    fs,
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
     time::Instant,
@@ -12,10 +14,10 @@ use lsp_types::{Uri, WorkspaceFolder};
 
 use crate::{
     analyze::{
-        dirs,
+        dirs, hover, parse,
         types::{Ident, SymbolKind},
     },
-    text::{PositionEncoding, PositionRange},
+    text::{PositionEncoding, PositionRange, buffer::TextBuffer},
     utils::binary_search_range_by_key,
 };
 
@@ -275,6 +277,52 @@ fn load_files(load_queue_rx: Receiver<LoadCommand>, encoding: PositionEncoding) 
                 root_data.symbols.sort();
             }
         }
+    }
+}
+
+#[derive(Default)]
+pub struct GlobalsHoverCache {
+    cache: BTreeMap<Uri, CacheEntry>,
+}
+
+struct CacheEntry {
+    source: TextBuffer,
+    tree: tree_sitter::Tree,
+}
+
+impl GlobalsHoverCache {
+    fn load(&mut self, uri: Uri) -> anyhow::Result<btree_map::OccupiedEntry<'_, Uri, CacheEntry>> {
+        match self.cache.entry(uri) {
+            btree_map::Entry::Vacant(entry) => {
+                let uri = entry.key();
+                tracing::info!("Reading {:?} for hover", uri.as_str());
+
+                let path = file_uri_to_path(&uri)
+                    .with_context(|| format!("{:?} is not a file URL", uri.as_str()))?;
+                let source = fs::read(&path).with_context(|| format!("Failed to read {path:?}"))?;
+
+                let source = TextBuffer::from(String::from_utf8_lossy_owned(source));
+                let tree = parse(source.as_bytes(), None)?;
+
+                let entry = entry.insert_entry(CacheEntry { source, tree });
+                Ok(entry)
+            }
+            btree_map::Entry::Occupied(entry) => Ok(entry),
+        }
+    }
+
+    pub fn hover(
+        &mut self,
+        uri: Uri,
+        definition: PositionRange,
+        encoding: PositionEncoding,
+    ) -> anyhow::Result<String> {
+        let cache_entry = self.load(uri)?;
+        let file = cache_entry.get();
+
+        let snippet = hover::hover(&file.source, encoding, &file.tree, definition);
+
+        Ok(snippet)
     }
 }
 

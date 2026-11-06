@@ -6,14 +6,15 @@ use std::{
 
 use anyhow::Context;
 use bytes::Bytes;
-use bytes_str::BytesStr;
 use crossbeam_channel::{Receiver, RecvError, RecvTimeoutError, Sender, unbounded};
 use itertools::Itertools;
 use lsp_types::Uri;
 
 use crate::{
     analyze::{
-        FIELD_IDENTIFIER_KIND, IDENTIFIER_KIND, TYPE_IDENTIFIER_KIND, locals, parse,
+        FIELD_IDENTIFIER_KIND, IDENTIFIER_KIND, TYPE_IDENTIFIER_KIND,
+        hover::hover,
+        locals, parse,
         types::{Ident, SymbolKind},
     },
     text::{
@@ -222,8 +223,8 @@ impl Document {
         definitions.into_iter().map(|d| d.name).collect()
     }
 
-    pub fn text_for<'a>(&'a self, node: tree_sitter::Node) -> BytesStr {
-        self.source.slice(node.byte_range())
+    pub fn hover(&self, definition: PositionRange) -> String {
+        hover(&self.source, self.encoding, &self.tree, definition)
     }
 
     pub fn completions(&self, pos: Position) -> Vec<(&[u8], SymbolKind)> {

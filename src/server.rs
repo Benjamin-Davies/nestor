@@ -7,13 +7,14 @@ use lsp_server::Message;
 use lsp_types::{
     CompletionItem, CompletionItemLabelDetails, CompletionList, CompletionParams,
     DidChangeTextDocumentParams, DidChangeWorkspaceFoldersParams, DidCloseTextDocumentParams,
-    DidOpenTextDocumentParams, DidSaveTextDocumentParams, GotoDefinitionParams, Location,
-    PositionEncodingKind, ReferenceParams, TextDocumentIdentifier, TextDocumentPositionParams, Uri,
+    DidOpenTextDocumentParams, DidSaveTextDocumentParams, GotoDefinitionParams, Hover,
+    HoverContents, HoverParams, LanguageString, Location, MarkedString, PositionEncodingKind,
+    ReferenceParams, TextDocumentIdentifier, TextDocumentPositionParams, Uri,
 };
 
 use crate::{
     analyze::{KEYWORDS, types::SymbolKind},
-    globals::GlobalsStore,
+    globals::{GlobalsHoverCache, GlobalsStore},
     locals::LocalsStore,
     messages::{Notification, Request, Response},
     text::{Change, Position, PositionEncoding},
@@ -21,6 +22,7 @@ use crate::{
 
 struct Server {
     connection: lsp_server::Connection,
+    encoding: PositionEncoding,
     locals_store: LocalsStore,
     globals_store: GlobalsStore,
 }
@@ -52,6 +54,7 @@ pub fn run_server(connection: lsp_server::Connection) -> anyhow::Result<()> {
 
     let mut server = Server {
         connection,
+        encoding,
         locals_store,
         globals_store,
     };
@@ -106,6 +109,7 @@ fn server_capabilities(encoding: PositionEncoding) -> lsp_types::ServerCapabilit
         )),
         definition_provider: Some(lsp_types::OneOf::Left(true)),
         references_provider: Some(lsp_types::OneOf::Left(true)),
+        hover_provider: Some(lsp_types::HoverProviderCapability::Simple(true)),
         completion_provider: Some(lsp_types::CompletionOptions {
             completion_item: Some(lsp_types::CompletionOptionsCompletionItem {
                 label_details_support: Some(true),
@@ -167,6 +171,28 @@ impl Server {
                 self.connection
                     .sender
                     .send(Response::Locations(id, locations).into())?;
+            }
+            Request::Hover(
+                id,
+                HoverParams {
+                    text_document_position_params:
+                        TextDocumentPositionParams {
+                            text_document: TextDocumentIdentifier { uri },
+                            position,
+                        },
+                    ..
+                },
+            ) => {
+                tracing::info!("hover {} {}", uri.as_str(), Position::from(position));
+
+                let hover = self
+                    .hover(&uri, position.into())
+                    .inspect_err(|err| tracing::warn!("Error resolving hover: {err}"))
+                    .ok();
+
+                self.connection
+                    .sender
+                    .send(Response::Hover(id, hover).into())?;
             }
             Request::Completion(
                 id,
@@ -270,7 +296,7 @@ impl Server {
     }
 
     fn find_definitions(
-        &mut self,
+        &self,
         uri: &Uri,
         position: Position,
     ) -> Result<Vec<Location>, anyhow::Error> {
@@ -278,7 +304,6 @@ impl Server {
         let ident = document
             .ident_at(position.into())
             .context("No ident at cursor")?;
-        tracing::warn!("{ident:?}");
 
         let definitions = document.find_definitions(&ident);
         let locations = definitions
@@ -336,6 +361,50 @@ impl Server {
         );
 
         Ok(locations)
+    }
+
+    fn hover(&self, uri: &Uri, position: Position) -> anyhow::Result<Hover> {
+        let definitions = self.find_definitions(uri, position)?;
+
+        let mut cache = GlobalsHoverCache::default();
+        let mut contents = definitions
+            .into_iter()
+            .map(|definition| {
+                if let Some(document) = self.locals_store.document(&definition.uri).ok() {
+                    let snippet = document.hover(definition.range.into());
+                    MarkedString::LanguageString(LanguageString {
+                        language: "c".to_owned(),
+                        value: snippet,
+                    })
+                } else {
+                    match cache.hover(definition.uri, definition.range.into(), self.encoding) {
+                        Ok(snippet) => MarkedString::LanguageString(LanguageString {
+                            language: "c".to_owned(),
+                            value: snippet,
+                        }),
+                        Err(err) => MarkedString::String(err.to_string()),
+                    }
+                }
+            })
+            .collect_vec();
+
+        // Must come after all other document uses to avoid a deadlock.
+        let document = self.locals_store.document(uri)?;
+        let ident = document
+            .ident_at(position.into())
+            .context("No ident at cursor")?;
+
+        if contents.is_empty() {
+            contents.push(MarkedString::String(format!(
+                "No definition found for `{}`",
+                String::from_utf8_lossy(&ident.bytes),
+            )));
+        }
+
+        Ok(Hover {
+            contents: HoverContents::Array(contents),
+            range: Some(ident.range.into()),
+        })
     }
 
     fn complete(&self, uri: &Uri, position: Position) -> anyhow::Result<CompletionList> {

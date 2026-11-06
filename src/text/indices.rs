@@ -132,4 +132,15 @@ impl PositionRange {
             end: Position::from_ts_bytes(range.end_byte, range.end_point, bytes, encoding),
         }
     }
+
+    pub fn to_ts(self, buf: &TextBuffer, encoding: PositionEncoding) -> tree_sitter::Range {
+        let (start_byte, start_point) = self.start.to_ts(buf, encoding);
+        let (end_byte, end_point) = self.end.to_ts(buf, encoding);
+        tree_sitter::Range {
+            start_byte,
+            end_byte,
+            start_point,
+            end_point,
+        }
+    }
 }
