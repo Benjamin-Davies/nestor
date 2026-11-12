@@ -3,8 +3,8 @@ use std::{env, fmt, fs};
 use bytes::Bytes;
 use bytes_str::BytesStr;
 use nestor::{
-    analyze::{globals, locals, parse},
-    text::PositionEncoding,
+    analyze::{globals, hover, locals, parse},
+    text::{PositionEncoding, buffer::TextBuffer},
 };
 
 const BTREE_C: &str = include_str!("btree.c");
@@ -56,6 +56,48 @@ fn test_analyze_locals_small() {
     );
 
     assert_expected("locals_analyze_small", &locals);
+}
+
+#[test]
+fn test_hover_variable() {
+    let source = TextBuffer::from(BTREE_C.to_owned());
+    let tree = parse(BTREE_C.as_bytes(), None).unwrap();
+    let hover = hover::hover(
+        &source,
+        PositionEncoding::Utf8,
+        &tree,
+        "32:18-32:20".parse().unwrap(),
+    );
+
+    assert_expected("hover_variable", &hover);
+}
+
+#[test]
+fn test_hover_function() {
+    let source = TextBuffer::from(BTREE_C.to_owned());
+    let tree = parse(BTREE_C.as_bytes(), None).unwrap();
+    let hover = hover::hover(
+        &source,
+        PositionEncoding::Utf8,
+        &tree,
+        "99:4-99:31".parse().unwrap(),
+    );
+
+    assert_expected("hover_function", &hover);
+}
+
+#[test]
+fn test_hover_macro() {
+    let source = TextBuffer::from(BTREE_C.to_owned());
+    let tree = parse(BTREE_C.as_bytes(), None).unwrap();
+    let hover = hover::hover(
+        &source,
+        PositionEncoding::Utf8,
+        &tree,
+        "54:8-54:23".parse().unwrap(),
+    );
+
+    assert_expected("hover_macro", &hover);
 }
 
 fn assert_expected(key: &str, value: impl fmt::Debug) {
