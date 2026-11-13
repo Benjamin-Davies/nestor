@@ -235,8 +235,7 @@ impl From<&dirs::Symbol> for Symbol {
 // This function receives weak node handles so that we can discard them if all
 // files are closed.
 fn load_files(load_queue_rx: Receiver<LoadCommand>, encoding: PositionEncoding) {
-    let mut stack = Vec::new();
-    while let Some(load_command) = stack.pop().or_else(|| load_queue_rx.recv().ok()) {
+    while let Ok(load_command) = load_queue_rx.recv() {
         match load_command {
             LoadCommand::LoadRoot(path, root_data) => {
                 let start = Instant::now();
