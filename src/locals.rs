@@ -19,6 +19,7 @@ use crate::{
     },
     text::{
         Change, Position, PositionEncoding, PositionRange, buffer::TextBuffer, flat_rope::FlatRope,
+        markdown::Markdown,
     },
 };
 
@@ -223,7 +224,7 @@ impl Document {
         definitions.into_iter().map(|d| d.name).collect()
     }
 
-    pub fn hover(&self, definition: PositionRange) -> String {
+    pub fn hover(&self, definition: PositionRange) -> Markdown {
         hover(&self.source, self.encoding, &self.tree, definition)
     }
 

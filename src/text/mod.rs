@@ -5,6 +5,7 @@ use anyhow::Context;
 pub mod buffer;
 pub mod flat_rope;
 pub mod indices;
+pub mod markdown;
 pub mod ropes;
 
 /// The encoding that we use to encode positions. We always store text

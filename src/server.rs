@@ -4,11 +4,12 @@ use clap::{crate_name, crate_version};
 use itertools::Itertools;
 use lsp_server::Message;
 use lsp_types::{
-    CompletionItem, CompletionItemLabelDetails, CompletionList, CompletionParams, DefinitionParams,
-    DidChangeTextDocumentParams, DidChangeWorkspaceFoldersParams, DidCloseTextDocumentParams,
-    DidOpenTextDocumentParams, DidSaveTextDocumentParams, HoverParams, Location,
-    PositionEncodingKind, ReferenceParams, TextDocumentIdentifier, TextDocumentPositionParams, Uri,
-    VersionedTextDocumentIdentifier, WorkspaceFoldersChangeEvent,
+    CompletionItem, CompletionItemLabelDetails, CompletionList, CompletionParams, Contents,
+    DefinitionParams, DidChangeTextDocumentParams, DidChangeWorkspaceFoldersParams,
+    DidCloseTextDocumentParams, DidOpenTextDocumentParams, DidSaveTextDocumentParams, Hover,
+    HoverParams, Location, MarkupContent, MarkupKind, PositionEncodingKind, ReferenceParams,
+    TextDocumentIdentifier, TextDocumentPositionParams, Uri, VersionedTextDocumentIdentifier,
+    WorkspaceFoldersChangeEvent,
 };
 
 use crate::{
@@ -187,7 +188,14 @@ impl Server {
                     .workspace
                     .hover(&uri.into(), position.into())
                     .inspect_err(|err| tracing::warn!("Error resolving hover: {err}"))
-                    .ok();
+                    .ok()
+                    .map(|(contents, range)| Hover {
+                        contents: Contents::MarkupContent(MarkupContent {
+                            kind: MarkupKind::Markdown,
+                            value: contents.to_string(),
+                        }),
+                        range: Some(range.into()),
+                    });
 
                 self.connection
                     .sender

@@ -5,6 +5,7 @@ use crate::{
         PARAMETER_DECLARATION_KIND, PREPROC_DEF_KIND, PREPROC_FUNCTION_DEF_KIND,
         STRUCT_SPECIFIER_KIND, TYPE_DEFINITION_KIND, UNION_SPECIFIER_KIND,
     },
+    text::markdown::Markdown,
     text::{PositionEncoding, PositionRange, buffer::TextBuffer},
 };
 
@@ -13,15 +14,18 @@ pub fn hover(
     encoding: PositionEncoding,
     tree: &tree_sitter::Tree,
     definition: PositionRange,
-) -> String {
+) -> Markdown {
     let ident = definition.to_ts(source, encoding);
 
     let mut snippet = extract_snippet(source, tree, ident);
-    if !snippet.starts_with("#") && !snippet.ends_with(";") {
-        snippet += ";";
+    if !snippet.starts_with("#") {
+        snippet += ";\n";
     }
 
-    snippet
+    let mut md = Markdown::default();
+    md.push_code_block(snippet);
+
+    md
 }
 
 fn extract_snippet(
@@ -42,7 +46,7 @@ fn extract_snippet(
             | UNION_SPECIFIER_KIND
             | ENUMERATOR_KIND
             | PARAMETER_DECLARATION_KIND => {
-                return source[node.byte_range()].trim().to_owned();
+                return source[node.byte_range()].to_owned();
             }
             FUNCTION_DECLARATOR_KIND | ARRAY_DECLARATOR_KIND => {
                 end_byte = node.end_byte();
@@ -51,11 +55,11 @@ fn extract_snippet(
             | DECLARATION_KIND
             | TYPE_DEFINITION_KIND
             | FIELD_DECLARATION_KIND => {
-                return source[node.start_byte()..end_byte].trim().to_owned();
+                return source[node.start_byte()..end_byte].to_owned();
             }
             _ => {}
         }
     }
 
-    source[ident.start_byte..ident.end_byte].trim().to_owned()
+    source[ident.start_byte..ident.end_byte].to_owned()
 }

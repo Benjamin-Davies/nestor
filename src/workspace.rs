@@ -1,14 +1,12 @@
 use anyhow::Context;
 use itertools::Itertools;
-#[expect(deprecated)] // Used below
-use lsp_types::{Contents, Hover, MarkedString, MarkedStringWithLanguage};
 use url::Url;
 
 use crate::{
     analyze::{KEYWORDS, types::SymbolKind},
     globals::{GlobalsHoverCache, GlobalsStore},
     locals::LocalsStore,
-    text::{Change, Position, PositionEncoding, PositionRange},
+    text::{Change, Position, PositionEncoding, PositionRange, markdown::Markdown},
 };
 
 pub struct Workspace {
@@ -142,35 +140,34 @@ impl Workspace {
         Ok(locations)
     }
 
-    #[expect(deprecated)] // TODO: Just return markdown and a range
-    pub fn hover(&self, uri: &Url, position: Position) -> anyhow::Result<Hover> {
+    pub fn hover(
+        &self,
+        uri: &Url,
+        position: Position,
+    ) -> anyhow::Result<(Markdown, PositionRange)> {
         tracing::info!("Hover {uri} {position}");
 
         let definitions = self.find_definitions(uri, position)?;
 
         let mut cache = GlobalsHoverCache::default();
-        let mut contents = definitions
-            .into_iter()
-            .map(|(uri, range)| {
-                if let Some(document) = self.locals_store.document(&uri).ok() {
-                    let snippet = document.hover(range);
-                    MarkedString::MarkedStringWithLanguage(MarkedStringWithLanguage {
-                        language: "c".to_owned(),
-                        value: snippet,
-                    })
-                } else {
-                    match cache.hover(uri, range, self.encoding) {
-                        Ok(snippet) => {
-                            MarkedString::MarkedStringWithLanguage(MarkedStringWithLanguage {
-                                language: "c".to_owned(),
-                                value: snippet,
-                            })
-                        }
-                        Err(err) => MarkedString::String(err.to_string()),
+        let mut md = Markdown::default();
+        for (uri, range) in definitions {
+            if !md.is_empty() {
+                md.push_rule();
+            }
+
+            if let Some(document) = self.locals_store.document(&uri).ok() {
+                let hover = document.hover(range);
+                md.append(hover);
+            } else {
+                match cache.hover(uri, range, self.encoding) {
+                    Ok(hover) => md.append(hover),
+                    Err(err) => {
+                        md.build_paragraph().push_text(err.to_string());
                     }
                 }
-            })
-            .collect_vec();
+            }
+        }
 
         // Must come after all other document uses to avoid a deadlock.
         let document = self.locals_store.document(uri)?;
@@ -178,17 +175,13 @@ impl Workspace {
             .ident_at(position.into())
             .context("No ident at cursor")?;
 
-        if contents.is_empty() {
-            contents.push(MarkedString::String(format!(
-                "No definition found for `{}`",
-                String::from_utf8_lossy(&ident.bytes),
-            )));
+        if md.is_empty() {
+            md.build_paragraph()
+                .push_text("No definition found for ")
+                .push_code(String::from_utf8_lossy(&ident.bytes).into_owned());
         }
 
-        Ok(Hover {
-            contents: Contents::MarkedStringList(contents),
-            range: Some(ident.range.into()),
-        })
+        Ok((md, ident.range))
     }
 
     pub fn complete<'a>(

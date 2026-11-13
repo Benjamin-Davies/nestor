@@ -1,1 +1,6 @@
-"static const char zMagicHeader[];"
+"""
+
+````c
+static const char zMagicHeader[];
+````
+"""

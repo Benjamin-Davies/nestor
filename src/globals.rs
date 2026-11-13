@@ -17,7 +17,7 @@ use crate::{
         dirs, hover, parse,
         types::{Ident, SymbolKind},
     },
-    text::{PositionEncoding, PositionRange, buffer::TextBuffer},
+    text::{PositionEncoding, PositionRange, buffer::TextBuffer, markdown::Markdown},
     utils::binary_search_range_by_key,
 };
 
@@ -308,7 +308,7 @@ impl GlobalsHoverCache {
         uri: Url,
         definition: PositionRange,
         encoding: PositionEncoding,
-    ) -> anyhow::Result<String> {
+    ) -> anyhow::Result<Markdown> {
         let cache_entry = self.load(uri)?;
         let file = cache_entry.get();
 

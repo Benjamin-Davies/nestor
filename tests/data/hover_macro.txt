@@ -1,1 +1,6 @@
-"#define get2byteNotZero(X)  (((((int)get2byte(X))-1)&0xffff)+1)"
+"""
+
+````c
+#define get2byteNotZero(X)  (((((int)get2byte(X))-1)&0xffff)+1)
+````
+"""
