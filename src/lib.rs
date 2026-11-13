@@ -7,3 +7,4 @@ pub mod messages;
 pub mod server;
 pub mod text;
 pub mod utils;
+pub mod workspace;

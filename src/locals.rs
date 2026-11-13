@@ -8,7 +8,6 @@ use anyhow::Context;
 use bytes::Bytes;
 use crossbeam_channel::{Receiver, RecvError, RecvTimeoutError, Sender, unbounded};
 use itertools::Itertools;
-use lsp_types::Uri;
 
 use crate::{
     analyze::{
@@ -20,6 +19,7 @@ use crate::{
     text::{
         Change, Position, PositionEncoding, PositionRange, buffer::TextBuffer, flat_rope::FlatRope,
     },
+    utils::Uri,
 };
 
 pub struct LocalsStore {
@@ -100,7 +100,7 @@ impl LocalsStore {
         let document = self
             .documents
             .get(uri)
-            .with_context(|| format!("Document not open: {}", uri.as_str()))?;
+            .with_context(|| format!("Document not open: {uri}"))?;
 
         Ok(document.lock().expect("failed to lock document"))
     }
@@ -227,7 +227,7 @@ impl Document {
         hover(&self.source, self.encoding, &self.tree, definition)
     }
 
-    pub fn completions(&self, pos: Position) -> Vec<(&[u8], SymbolKind)> {
+    pub fn completions(&self, pos: Position) -> Vec<(String, SymbolKind)> {
         self.locals
             .definitions
             .iter()
@@ -235,7 +235,7 @@ impl Document {
                 defs.iter()
                     .filter(move |def| def.scope.contains_pos(pos))
                     .filter(move |def| !def.name.contains_pos(pos))
-                    .map(|def| (name as &[_], def.kind))
+                    .map(|def| (String::from_utf8_lossy(name).into_owned(), def.kind))
             })
             .collect_vec()
     }
@@ -267,7 +267,7 @@ fn background_thread(actions: Receiver<BackgroundAction>) {
                         continue;
                     }
 
-                    tracing::info!("Loaded {}", uri.as_str());
+                    tracing::info!("Loaded {uri}");
 
                     documents.insert(uri, document);
                 }
@@ -295,7 +295,7 @@ fn background_thread(actions: Receiver<BackgroundAction>) {
                 continue;
             }
 
-            tracing::info!("Updated {}", uri.as_str());
+            tracing::info!("Updated {uri}");
         }
     }
 }

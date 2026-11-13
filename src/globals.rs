@@ -10,7 +10,6 @@ use anyhow::Context;
 use bytes::Bytes;
 use crossbeam_channel::{Receiver, Sender, unbounded};
 use itertools::Itertools;
-use lsp_types::{Uri, WorkspaceFolder};
 
 use crate::{
     analyze::{
@@ -18,7 +17,7 @@ use crate::{
         types::{Ident, SymbolKind},
     },
     text::{PositionEncoding, PositionRange, buffer::TextBuffer},
-    utils::binary_search_range_by_key,
+    utils::{Uri, binary_search_range_by_key},
 };
 
 pub struct GlobalsStore {
@@ -70,23 +69,20 @@ impl GlobalsStore {
         }
     }
 
-    pub fn set_workspace_folders(&mut self, folders: &[WorkspaceFolder]) {
-        self.workspace_folders = folders
-            .iter()
-            .filter_map(|f| file_uri_to_path(&f.uri))
-            .collect_vec();
+    pub fn set_workspace_folders(&mut self, uris: impl IntoIterator<Item = Uri>) {
+        self.workspace_folders = uris.into_iter().filter_map(|u| u.as_path()).collect_vec();
     }
 
-    pub fn add_workspace_folder(&mut self, folder: &WorkspaceFolder) {
-        let Some(path) = file_uri_to_path(&folder.uri) else {
+    pub fn add_workspace_folder(&mut self, uri: &Uri) {
+        let Some(path) = uri.as_path() else {
             return;
         };
 
-        self.workspace_folders.push(path);
+        self.workspace_folders.push(path.to_owned());
     }
 
-    pub fn remove_workspace_folder(&mut self, folder: &WorkspaceFolder) {
-        let Some(path) = file_uri_to_path(&folder.uri) else {
+    pub fn remove_workspace_folder(&mut self, uri: &Uri) {
+        let Some(path) = uri.as_path() else {
             return;
         };
 
@@ -96,7 +92,7 @@ impl GlobalsStore {
     /// Called when a file is opened to indicate that the file's surroundings
     /// should be loaded.
     pub fn seed(&mut self, uri: &Uri) -> anyhow::Result<()> {
-        let Some(path) = file_uri_to_path(uri) else {
+        let Some(path) = uri.as_path() else {
             return Ok(());
         };
 
@@ -135,7 +131,7 @@ impl GlobalsStore {
     /// Called when a file is closed to indicate that the file's surroundings
     /// may no longer be relevant.
     pub fn unseed(&mut self, uri: &Uri) {
-        let Some(path) = file_uri_to_path(uri) else {
+        let Some(path) = uri.as_path() else {
             return;
         };
 
@@ -149,7 +145,7 @@ impl GlobalsStore {
 
     /// Called when a file is saved to refresh its symbols.
     pub fn refresh(&mut self, uri: &Uri, source: Bytes) -> anyhow::Result<()> {
-        let Some(path) = file_uri_to_path(&uri) else {
+        let Some(path) = uri.as_path() else {
             return Ok(());
         };
 
@@ -160,7 +156,7 @@ impl GlobalsStore {
         let root_data = root.data.clone();
 
         self.load_queue_tx
-            .send(LoadCommand::RefreshFile(path, source, root_data))?;
+            .send(LoadCommand::RefreshFile(path.to_owned(), source, root_data))?;
 
         Ok(())
     }
@@ -190,11 +186,7 @@ impl GlobalsStore {
                     debug_assert_eq!(s.name, ident.bytes);
                 })
                 .filter(|s| s.kind.class() == class && s.is_definition == is_definition)
-                .filter_map(|s| {
-                    s.try_into()
-                        .inspect_err(|err| tracing::warn!("Error finding symbol: {err}"))
-                        .ok()
-                });
+                .map(Symbol::from);
             symbols.extend(root_symbols);
         }
 
@@ -209,11 +201,7 @@ impl GlobalsStore {
                 .symbols
                 .iter()
                 .filter(|s| s.is_definition)
-                .filter_map(|s| {
-                    s.try_into()
-                        .inspect_err(|err| tracing::warn!("Error finding symbol: {err}"))
-                        .ok()
-                });
+                .map(Symbol::from);
             symbols.extend(root_symbols);
         }
 
@@ -229,16 +217,14 @@ impl RootData {
     }
 }
 
-impl TryFrom<&dirs::Symbol> for Symbol {
-    type Error = anyhow::Error;
-
-    fn try_from(symbol: &dirs::Symbol) -> anyhow::Result<Self> {
-        Ok(Symbol {
+impl From<&dirs::Symbol> for Symbol {
+    fn from(symbol: &dirs::Symbol) -> Self {
+        Symbol {
             name: symbol.name.clone(),
-            uri: path_to_file_uri(&symbol.path).context("failed to convert path to file uri")?,
+            uri: Uri::from_abs_path(&symbol.path),
             range: symbol.range,
             kind: symbol.kind,
-        })
+        }
     }
 }
 
@@ -295,10 +281,11 @@ impl GlobalsHoverCache {
         match self.cache.entry(uri) {
             btree_map::Entry::Vacant(entry) => {
                 let uri = entry.key();
-                tracing::info!("Reading {:?} for hover", uri.as_str());
+                tracing::info!("Reading {uri} for hover");
 
-                let path = file_uri_to_path(&uri)
-                    .with_context(|| format!("{:?} is not a file URL", uri.as_str()))?;
+                let path = uri
+                    .as_path()
+                    .with_context(|| format!("{uri} is not a file URL"))?;
                 let source = fs::read(&path).with_context(|| format!("Failed to read {path:?}"))?;
 
                 let source = TextBuffer::from(String::from_utf8_lossy_owned(source));
@@ -326,19 +313,6 @@ impl GlobalsHoverCache {
     }
 }
 
-fn file_uri_to_path(uri: &Uri) -> Option<PathBuf> {
-    if uri.scheme().map(|s| s.as_str()) != Some("file") {
-        return None;
-    }
-
-    Some(uri.path().as_str().into())
-}
-
-fn path_to_file_uri(path: &Path) -> Option<Uri> {
-    let s = path.as_os_str().to_str()?;
-    format!("file://{s}").parse().ok()
-}
-
 const GIT_DIR_NAME: &str = ".git";
 
 fn find_git_dir<'a>(mut path: &'a Path, base: &Path) -> Option<&'a Path> {
@@ -351,41 +325,4 @@ fn find_git_dir<'a>(mut path: &'a Path, base: &Path) -> Option<&'a Path> {
     }
 
     None
-}
-
-#[cfg(test)]
-mod tests {
-    use std::path::Path;
-
-    use lsp_types::Uri;
-
-    use crate::globals::{file_uri_to_path, path_to_file_uri};
-
-    #[test]
-    fn convert_file_uri_to_path() {
-        assert_eq!(
-            file_uri_to_path(&"http://example.com/".parse::<Uri>().unwrap()),
-            None,
-        );
-        assert_eq!(
-            file_uri_to_path(&"file:///".parse::<Uri>().unwrap()),
-            Some("/".into()),
-        );
-        assert_eq!(
-            file_uri_to_path(&"file:///home/bend/foo.txt".parse::<Uri>().unwrap()),
-            Some("/home/bend/foo.txt".into()),
-        );
-    }
-
-    #[test]
-    fn convert_path_to_file_uri() {
-        assert_eq!(
-            path_to_file_uri(Path::new("/")),
-            Some("file:///".parse::<Uri>().unwrap()),
-        );
-        assert_eq!(
-            path_to_file_uri(Path::new("/home/bend/foo.txt")),
-            Some("file:///home/bend/foo.txt".parse::<Uri>().unwrap()),
-        );
-    }
 }

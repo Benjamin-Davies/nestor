@@ -1,30 +1,25 @@
 use std::ops::ControlFlow;
 
-use anyhow::Context;
 use clap::{crate_name, crate_version};
 use itertools::Itertools;
 use lsp_server::Message;
 use lsp_types::{
     CompletionItem, CompletionItemLabelDetails, CompletionList, CompletionParams,
     DidChangeTextDocumentParams, DidChangeWorkspaceFoldersParams, DidCloseTextDocumentParams,
-    DidOpenTextDocumentParams, DidSaveTextDocumentParams, GotoDefinitionParams, Hover,
-    HoverContents, HoverParams, LanguageString, Location, MarkedString, PositionEncodingKind,
-    ReferenceParams, TextDocumentIdentifier, TextDocumentPositionParams, Uri,
+    DidOpenTextDocumentParams, DidSaveTextDocumentParams, GotoDefinitionParams, HoverParams,
+    Location, PositionEncodingKind, ReferenceParams, TextDocumentIdentifier,
+    TextDocumentPositionParams, Uri, WorkspaceFoldersChangeEvent,
 };
 
 use crate::{
-    analyze::{KEYWORDS, types::SymbolKind},
-    globals::{GlobalsHoverCache, GlobalsStore},
-    locals::LocalsStore,
     messages::{Notification, Request, Response},
     text::{Change, Position, PositionEncoding},
+    workspace::Workspace,
 };
 
 struct Server {
     connection: lsp_server::Connection,
-    encoding: PositionEncoding,
-    locals_store: LocalsStore,
-    globals_store: GlobalsStore,
+    workspace: Workspace,
 }
 
 pub fn run_server(connection: lsp_server::Connection) -> anyhow::Result<()> {
@@ -47,16 +42,15 @@ pub fn run_server(connection: lsp_server::Connection) -> anyhow::Result<()> {
     })?;
     connection.initialize_finish(initialize_id, initialize_result)?;
 
-    let locals_store = LocalsStore::new(encoding);
-
-    let mut globals_store = GlobalsStore::new(encoding);
-    globals_store.set_workspace_folders(&workspace_folders.unwrap_or_default());
-
     let mut server = Server {
         connection,
-        encoding,
-        locals_store,
-        globals_store,
+        workspace: Workspace::new(
+            encoding,
+            workspace_folders
+                .into_iter()
+                .flatten()
+                .map(|f| f.uri.into()),
+        ),
     };
     loop {
         let message = server.connection.receiver.recv()?;
@@ -137,13 +131,17 @@ impl Server {
                     ..
                 },
             ) => {
-                tracing::info!(
-                    "Go to definition {} {}",
-                    uri.as_str(),
-                    Position::from(position)
-                );
-
-                let locations = self.find_definitions(&uri, position.into())?;
+                let locations = self
+                    .workspace
+                    .find_definitions(&uri.into(), position.into())?
+                    .into_iter()
+                    .map(|(uri, range)| {
+                        Ok(Location {
+                            uri: uri.try_into()?,
+                            range: range.into(),
+                        })
+                    })
+                    .collect::<anyhow::Result<_>>()?;
 
                 self.connection
                     .sender
@@ -160,13 +158,17 @@ impl Server {
                     ..
                 },
             ) => {
-                tracing::info!(
-                    "Find references {} {}",
-                    uri.as_str(),
-                    Position::from(position)
-                );
-
-                let locations = self.find_references(&uri, position.into())?;
+                let locations = self
+                    .workspace
+                    .find_references(&uri.into(), position.into())?
+                    .into_iter()
+                    .map(|(uri, range)| {
+                        Ok(Location {
+                            uri: uri.try_into()?,
+                            range: range.into(),
+                        })
+                    })
+                    .collect::<anyhow::Result<_>>()?;
 
                 self.connection
                     .sender
@@ -183,10 +185,9 @@ impl Server {
                     ..
                 },
             ) => {
-                tracing::info!("hover {} {}", uri.as_str(), Position::from(position));
-
                 let hover = self
-                    .hover(&uri, position.into())
+                    .workspace
+                    .hover(&uri.into(), position.into())
                     .inspect_err(|err| tracing::warn!("Error resolving hover: {err}"))
                     .ok();
 
@@ -205,9 +206,7 @@ impl Server {
                     ..
                 },
             ) => {
-                tracing::info!("Complete {} {}", uri.as_str(), Position::from(position));
-
-                let list = self.complete(&uri, position.into())?;
+                let list = self.complete(uri, position.into())?;
 
                 self.connection
                     .sender
@@ -225,37 +224,33 @@ impl Server {
         match Notification::try_from(notification)? {
             Notification::Exit => return Ok(ControlFlow::Break(())),
             Notification::DidOpenTextDocument(DidOpenTextDocumentParams { text_document }) => {
-                tracing::info!("Opened {}", text_document.uri.as_str());
-
-                self.load_document(text_document.uri, text_document.text)?;
+                self.workspace
+                    .open_document(text_document.uri.into(), text_document.text)?;
             }
             Notification::DidChangeTextDocument(DidChangeTextDocumentParams {
                 text_document,
                 content_changes,
             }) => {
-                tracing::info!("Changed {}", text_document.uri.as_str());
-
                 let changes = content_changes.into_iter().map(Change::from).collect_vec();
-                self.update_document(text_document.uri, changes)?;
+                self.workspace
+                    .change_document(text_document.uri.into(), changes)?;
             }
             Notification::DidSaveTextDocument(DidSaveTextDocumentParams {
                 text_document, ..
             }) => {
-                tracing::info!("Saved {}", text_document.uri.as_str());
-
-                self.save_document(&text_document.uri)?;
+                self.workspace.save_document(&text_document.uri.into())?;
             }
             Notification::DidCloseTextDocument(DidCloseTextDocumentParams { text_document }) => {
-                tracing::info!("Closed {}", text_document.uri.as_str());
-
-                self.unload_document(text_document.uri)?;
+                self.workspace.close_document(text_document.uri.into())?;
             }
-            Notification::DidChangeWorkspaceFolders(DidChangeWorkspaceFoldersParams { event }) => {
-                for added in &event.added {
-                    self.globals_store.add_workspace_folder(added);
+            Notification::DidChangeWorkspaceFolders(DidChangeWorkspaceFoldersParams {
+                event: WorkspaceFoldersChangeEvent { added, removed },
+            }) => {
+                for folder in added {
+                    self.workspace.add_folder(&folder.uri.into());
                 }
-                for removed in &event.removed {
-                    self.globals_store.remove_workspace_folder(removed);
+                for folder in removed {
+                    self.workspace.remove_folder(&folder.uri.into());
                 }
             }
             _ => {}
@@ -264,170 +259,12 @@ impl Server {
         Ok(ControlFlow::Continue(()))
     }
 
-    fn load_document(&mut self, uri: Uri, source: String) -> anyhow::Result<()> {
-        self.globals_store.seed(&uri)?;
-
-        self.locals_store.load(uri, source)?;
-
-        Ok(())
-    }
-
-    fn update_document(&mut self, uri: Uri, changes: Vec<Change>) -> anyhow::Result<()> {
-        self.locals_store.update(uri, changes)?;
-
-        Ok(())
-    }
-
-    fn save_document(&mut self, uri: &Uri) -> anyhow::Result<()> {
-        let document = self.locals_store.document(uri)?;
-        let source = document.to_bytes();
-
-        self.globals_store.refresh(uri, source)?;
-
-        Ok(())
-    }
-
-    fn unload_document(&mut self, uri: Uri) -> anyhow::Result<()> {
-        self.globals_store.unseed(&uri);
-
-        self.locals_store.unload(uri)?;
-
-        Ok(())
-    }
-
-    fn find_definitions(
-        &self,
-        uri: &Uri,
-        position: Position,
-    ) -> Result<Vec<Location>, anyhow::Error> {
-        let document = self.locals_store.document(uri)?;
-        let ident = document
-            .ident_at(position.into())
-            .context("No ident at cursor")?;
-
-        let definitions = document.find_definitions(&ident);
-        let locations = definitions
-            .into_iter()
-            .map(|range| Location {
-                uri: uri.clone(),
-                range: range.into(),
-            })
-            .collect_vec();
-        if !locations.is_empty() {
-            return Ok(locations);
-        }
-
-        let global_definitions = self.globals_store.find_definitions(&ident);
-        let global_locations = global_definitions
-            .into_iter()
-            .filter(|s| &s.uri != uri)
-            .map(|s| Location {
-                uri: s.uri,
-                range: s.range.into(),
-            })
-            .collect_vec();
-
-        Ok(global_locations)
-    }
-
-    fn find_references(&self, uri: &Uri, position: Position) -> anyhow::Result<Vec<Location>> {
-        let document = self.locals_store.document(uri)?;
-        let ident = document
-            .ident_at(position.into())
-            .context("No ident at cursor")?;
-
-        let (references, is_local) = document.find_references(&ident);
-        let mut locations = references
-            .into_iter()
-            .map(|range| Location {
-                uri: uri.clone(),
-                range: range.into(),
-            })
-            .collect_vec();
-
-        if is_local {
-            return Ok(locations);
-        }
-
-        let global_references = self.globals_store.find_references(&ident);
-        locations.extend(
-            global_references
-                .into_iter()
-                .filter(|s| &s.uri != uri)
-                .map(|s| Location {
-                    uri: s.uri,
-                    range: s.range.into(),
-                }),
-        );
-
-        Ok(locations)
-    }
-
-    fn hover(&self, uri: &Uri, position: Position) -> anyhow::Result<Hover> {
-        let definitions = self.find_definitions(uri, position)?;
-
-        let mut cache = GlobalsHoverCache::default();
-        let mut contents = definitions
-            .into_iter()
-            .map(|definition| {
-                if let Some(document) = self.locals_store.document(&definition.uri).ok() {
-                    let snippet = document.hover(definition.range.into());
-                    MarkedString::LanguageString(LanguageString {
-                        language: "c".to_owned(),
-                        value: snippet,
-                    })
-                } else {
-                    match cache.hover(definition.uri, definition.range.into(), self.encoding) {
-                        Ok(snippet) => MarkedString::LanguageString(LanguageString {
-                            language: "c".to_owned(),
-                            value: snippet,
-                        }),
-                        Err(err) => MarkedString::String(err.to_string()),
-                    }
-                }
-            })
-            .collect_vec();
-
-        // Must come after all other document uses to avoid a deadlock.
-        let document = self.locals_store.document(uri)?;
-        let ident = document
-            .ident_at(position.into())
-            .context("No ident at cursor")?;
-
-        if contents.is_empty() {
-            contents.push(MarkedString::String(format!(
-                "No definition found for `{}`",
-                String::from_utf8_lossy(&ident.bytes),
-            )));
-        }
-
-        Ok(Hover {
-            contents: HoverContents::Array(contents),
-            range: Some(ident.range.into()),
-        })
-    }
-
-    fn complete(&self, uri: &Uri, position: Position) -> anyhow::Result<CompletionList> {
-        let document = self.locals_store.document(uri)?;
-
-        let local_completions = document.completions(position.into());
-
-        let global_definitions = self.globals_store.all_definitions();
-        let global_completions = global_definitions
-            .iter()
-            .filter(|s| &s.uri != uri)
-            .map(|symbol| (&symbol.name as &[_], symbol.kind));
-
-        let keyword_completions = KEYWORDS
-            .iter()
-            .map(|keyword| (keyword.as_bytes(), SymbolKind::Keyword));
-
-        let items = local_completions
-            .into_iter()
-            .chain(global_completions)
-            .chain(keyword_completions)
+    pub fn complete(&self, uri: Uri, position: Position) -> anyhow::Result<CompletionList> {
+        let items = self
+            .workspace
+            .complete(&uri.into(), position.into())?
             .map(|(name, kind)| CompletionItem {
-                label: String::from_utf8_lossy(name).into(),
+                label: name,
                 label_details: Some(CompletionItemLabelDetails {
                     detail: Some(kind.to_string()),
                     description: None,
