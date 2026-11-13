@@ -4,11 +4,11 @@ use clap::{crate_name, crate_version};
 use itertools::Itertools;
 use lsp_server::Message;
 use lsp_types::{
-    CompletionItem, CompletionItemLabelDetails, CompletionList, CompletionParams,
+    CompletionItem, CompletionItemLabelDetails, CompletionList, CompletionParams, DefinitionParams,
     DidChangeTextDocumentParams, DidChangeWorkspaceFoldersParams, DidCloseTextDocumentParams,
-    DidOpenTextDocumentParams, DidSaveTextDocumentParams, GotoDefinitionParams, HoverParams,
-    Location, PositionEncodingKind, ReferenceParams, TextDocumentIdentifier,
-    TextDocumentPositionParams, Uri, WorkspaceFoldersChangeEvent,
+    DidOpenTextDocumentParams, DidSaveTextDocumentParams, HoverParams, Location,
+    PositionEncodingKind, ReferenceParams, TextDocumentIdentifier, TextDocumentPositionParams, Uri,
+    VersionedTextDocumentIdentifier, WorkspaceFoldersChangeEvent,
 };
 
 use crate::{
@@ -25,13 +25,9 @@ struct Server {
 pub fn run_server(connection: lsp_server::Connection) -> anyhow::Result<()> {
     let (initialize_id, initialize_params) = connection.initialize_start()?;
 
-    let lsp_types::InitializeParams {
-        workspace_folders,
-        capabilities,
-        ..
-    } = serde_json::from_value(initialize_params)?;
+    let init_params = serde_json::from_value::<lsp_types::InitializeParams>(initialize_params)?;
 
-    let encoding = choose_position_encoding(&capabilities);
+    let encoding = choose_position_encoding(&init_params.capabilities);
 
     let initialize_result = serde_json::to_value(lsp_types::InitializeResult {
         capabilities: server_capabilities(encoding),
@@ -42,15 +38,19 @@ pub fn run_server(connection: lsp_server::Connection) -> anyhow::Result<()> {
     })?;
     connection.initialize_finish(initialize_id, initialize_result)?;
 
+    let folders = init_params
+        .workspace_folders_initialize_params
+        .workspace_folders
+        .and_then(|f| match f {
+            lsp_types::WorkspaceFolders::WorkspaceFolderList(folders) => Some(folders),
+            lsp_types::WorkspaceFolders::Null => None,
+        })
+        .into_iter()
+        .flatten()
+        .map(|f| f.uri.into());
     let mut server = Server {
         connection,
-        workspace: Workspace::new(
-            encoding,
-            workspace_folders
-                .into_iter()
-                .flatten()
-                .map(|f| f.uri.into()),
-        ),
+        workspace: Workspace::new(encoding, folders),
     };
     loop {
         let message = server.connection.receiver.recv()?;
@@ -92,20 +92,20 @@ fn choose_position_encoding(capabilities: &lsp_types::ClientCapabilities) -> Pos
 fn server_capabilities(encoding: PositionEncoding) -> lsp_types::ServerCapabilities {
     lsp_types::ServerCapabilities {
         position_encoding: Some(encoding.into()),
-        text_document_sync: Some(lsp_types::TextDocumentSyncCapability::Options(
+        text_document_sync: Some(lsp_types::TextDocumentSync::Options(
             lsp_types::TextDocumentSyncOptions {
                 open_close: Some(true),
-                change: Some(lsp_types::TextDocumentSyncKind::INCREMENTAL),
+                change: Some(lsp_types::TextDocumentSyncKind::Incremental),
                 will_save: None,
                 will_save_wait_until: None,
-                save: Some(lsp_types::TextDocumentSyncSaveOptions::Supported(true)),
+                save: Some(lsp_types::Save::Bool(true)),
             },
         )),
-        definition_provider: Some(lsp_types::OneOf::Left(true)),
-        references_provider: Some(lsp_types::OneOf::Left(true)),
-        hover_provider: Some(lsp_types::HoverProviderCapability::Simple(true)),
+        definition_provider: Some(lsp_types::DefinitionProvider::Bool(true)),
+        references_provider: Some(lsp_types::ReferencesProvider::Bool(true)),
+        hover_provider: Some(lsp_types::HoverProvider::Bool(true)),
         completion_provider: Some(lsp_types::CompletionOptions {
-            completion_item: Some(lsp_types::CompletionOptionsCompletionItem {
+            completion_item: Some(lsp_types::ServerCompletionItemOptions {
                 label_details_support: Some(true),
             }),
             ..Default::default()
@@ -120,9 +120,9 @@ impl Server {
             Request::Shutdown(id) => {
                 self.connection.sender.send(Response::Ok(id).into())?;
             }
-            Request::GotoDefinition(
+            Request::Definition(
                 id,
-                GotoDefinitionParams {
+                DefinitionParams {
                     text_document_position_params:
                         TextDocumentPositionParams {
                             text_document: TextDocumentIdentifier { uri },
@@ -133,15 +133,13 @@ impl Server {
             ) => {
                 let locations = self
                     .workspace
-                    .find_definitions(&uri.into(), position.into())?
+                    .find_definitions(&uri, position.into())?
                     .into_iter()
-                    .map(|(uri, range)| {
-                        Ok(Location {
-                            uri: uri.try_into()?,
-                            range: range.into(),
-                        })
+                    .map(|(uri, range)| Location {
+                        uri,
+                        range: range.into(),
                     })
-                    .collect::<anyhow::Result<_>>()?;
+                    .collect_vec();
 
                 self.connection
                     .sender
@@ -150,7 +148,7 @@ impl Server {
             Request::FindReferences(
                 id,
                 ReferenceParams {
-                    text_document_position:
+                    text_document_position_params:
                         TextDocumentPositionParams {
                             text_document: TextDocumentIdentifier { uri },
                             position,
@@ -198,7 +196,7 @@ impl Server {
             Request::Completion(
                 id,
                 CompletionParams {
-                    text_document_position:
+                    text_document_position_params:
                         TextDocumentPositionParams {
                             text_document: TextDocumentIdentifier { uri },
                             position,
@@ -228,12 +226,15 @@ impl Server {
                     .open_document(text_document.uri.into(), text_document.text)?;
             }
             Notification::DidChangeTextDocument(DidChangeTextDocumentParams {
-                text_document,
+                text_document:
+                    VersionedTextDocumentIdentifier {
+                        text_document_identifier: TextDocumentIdentifier { uri },
+                        ..
+                    },
                 content_changes,
             }) => {
                 let changes = content_changes.into_iter().map(Change::from).collect_vec();
-                self.workspace
-                    .change_document(text_document.uri.into(), changes)?;
+                self.workspace.change_document(uri.into(), changes)?;
             }
             Notification::DidSaveTextDocument(DidSaveTextDocumentParams {
                 text_document, ..
@@ -278,6 +279,7 @@ impl Server {
         Ok(CompletionList {
             is_incomplete: false,
             items,
+            ..Default::default()
         })
     }
 }

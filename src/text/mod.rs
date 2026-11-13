@@ -91,13 +91,16 @@ impl From<PositionRange> for lsp_types::Range {
 
 impl From<lsp_types::TextDocumentContentChangeEvent> for Change {
     fn from(value: lsp_types::TextDocumentContentChangeEvent) -> Self {
-        if let Some(old_range) = value.range {
-            Self::Incremental(IncrementalChange {
-                old_range: old_range.into(),
-                new_text: value.text,
-            })
-        } else {
-            Self::Complete(value.text)
+        match value {
+            lsp_types::TextDocumentContentChangeEvent::TextDocumentContentChangePartial(
+                lsp_types::TextDocumentContentChangePartial { range, text, .. },
+            ) => Self::Incremental(IncrementalChange {
+                old_range: range.into(),
+                new_text: text,
+            }),
+            lsp_types::TextDocumentContentChangeEvent::TextDocumentContentChangeWholeDocument(
+                lsp_types::TextDocumentContentChangeWholeDocument { text },
+            ) => Self::Complete(text),
         }
     }
 }

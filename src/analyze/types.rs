@@ -108,14 +108,14 @@ impl From<SymbolKind> for Option<lsp_types::CompletionItemKind> {
         use lsp_types::CompletionItemKind as K;
         match value {
             SymbolKind::Unknown => None,
-            SymbolKind::Variable => Some(K::VARIABLE),
-            SymbolKind::Function => Some(K::FUNCTION),
-            SymbolKind::Type => Some(K::CLASS),
-            SymbolKind::Field => Some(K::FIELD),
-            SymbolKind::EnumVariant => Some(K::ENUM_MEMBER),
-            SymbolKind::Macro => Some(K::CONSTANT),
-            SymbolKind::FunctionMacro => Some(K::FUNCTION),
-            SymbolKind::Keyword => Some(K::KEYWORD),
+            SymbolKind::Variable => Some(K::Variable),
+            SymbolKind::Function => Some(K::Function),
+            SymbolKind::Type => Some(K::Class),
+            SymbolKind::Field => Some(K::Field),
+            SymbolKind::EnumVariant => Some(K::EnumMember),
+            SymbolKind::Macro => Some(K::Constant),
+            SymbolKind::FunctionMacro => Some(K::Function),
+            SymbolKind::Keyword => Some(K::Keyword),
         }
     }
 }

@@ -10,6 +10,7 @@ use anyhow::Context;
 use bytes::Bytes;
 use crossbeam_channel::{Receiver, Sender, unbounded};
 use itertools::Itertools;
+use url::Url;
 
 use crate::{
     analyze::{
@@ -17,7 +18,7 @@ use crate::{
         types::{Ident, SymbolKind},
     },
     text::{PositionEncoding, PositionRange, buffer::TextBuffer},
-    utils::{Uri, binary_search_range_by_key},
+    utils::binary_search_range_by_key,
 };
 
 pub struct GlobalsStore {
@@ -28,7 +29,7 @@ pub struct GlobalsStore {
 
 pub struct Symbol {
     pub name: Bytes,
-    pub uri: Uri,
+    pub uri: Url,
     pub range: PositionRange,
     pub kind: SymbolKind,
 }
@@ -69,20 +70,23 @@ impl GlobalsStore {
         }
     }
 
-    pub fn set_workspace_folders(&mut self, uris: impl IntoIterator<Item = Uri>) {
-        self.workspace_folders = uris.into_iter().filter_map(|u| u.as_path()).collect_vec();
+    pub fn set_workspace_folders(&mut self, uris: impl IntoIterator<Item = Url>) {
+        self.workspace_folders = uris
+            .into_iter()
+            .filter_map(|u| u.to_file_path().ok())
+            .collect_vec();
     }
 
-    pub fn add_workspace_folder(&mut self, uri: &Uri) {
-        let Some(path) = uri.as_path() else {
+    pub fn add_workspace_folder(&mut self, uri: &Url) {
+        let Ok(path) = uri.to_file_path() else {
             return;
         };
 
-        self.workspace_folders.push(path.to_owned());
+        self.workspace_folders.push(path);
     }
 
-    pub fn remove_workspace_folder(&mut self, uri: &Uri) {
-        let Some(path) = uri.as_path() else {
+    pub fn remove_workspace_folder(&mut self, uri: &Url) {
+        let Ok(path) = uri.to_file_path() else {
             return;
         };
 
@@ -91,8 +95,8 @@ impl GlobalsStore {
 
     /// Called when a file is opened to indicate that the file's surroundings
     /// should be loaded.
-    pub fn seed(&mut self, uri: &Uri) -> anyhow::Result<()> {
-        let Some(path) = uri.as_path() else {
+    pub fn seed(&mut self, uri: &Url) -> anyhow::Result<()> {
+        let Ok(path) = uri.to_file_path() else {
             return Ok(());
         };
 
@@ -130,8 +134,8 @@ impl GlobalsStore {
 
     /// Called when a file is closed to indicate that the file's surroundings
     /// may no longer be relevant.
-    pub fn unseed(&mut self, uri: &Uri) {
-        let Some(path) = uri.as_path() else {
+    pub fn unseed(&mut self, uri: &Url) {
+        let Ok(path) = uri.to_file_path() else {
             return;
         };
 
@@ -144,8 +148,8 @@ impl GlobalsStore {
     }
 
     /// Called when a file is saved to refresh its symbols.
-    pub fn refresh(&mut self, uri: &Uri, source: Bytes) -> anyhow::Result<()> {
-        let Some(path) = uri.as_path() else {
+    pub fn refresh(&mut self, uri: &Url, source: Bytes) -> anyhow::Result<()> {
+        let Ok(path) = uri.to_file_path() else {
             return Ok(());
         };
 
@@ -221,7 +225,7 @@ impl From<&dirs::Symbol> for Symbol {
     fn from(symbol: &dirs::Symbol) -> Self {
         Symbol {
             name: symbol.name.clone(),
-            uri: Uri::from_abs_path(&symbol.path),
+            uri: Url::from_file_path(&symbol.path).expect("expected absolute file path"),
             range: symbol.range,
             kind: symbol.kind,
         }
@@ -268,7 +272,7 @@ fn load_files(load_queue_rx: Receiver<LoadCommand>, encoding: PositionEncoding) 
 
 #[derive(Default)]
 pub struct GlobalsHoverCache {
-    cache: BTreeMap<Uri, CacheEntry>,
+    cache: BTreeMap<Url, CacheEntry>,
 }
 
 struct CacheEntry {
@@ -277,14 +281,15 @@ struct CacheEntry {
 }
 
 impl GlobalsHoverCache {
-    fn load(&mut self, uri: Uri) -> anyhow::Result<btree_map::OccupiedEntry<'_, Uri, CacheEntry>> {
+    fn load(&mut self, uri: Url) -> anyhow::Result<btree_map::OccupiedEntry<'_, Url, CacheEntry>> {
         match self.cache.entry(uri) {
             btree_map::Entry::Vacant(entry) => {
                 let uri = entry.key();
                 tracing::info!("Reading {uri} for hover");
 
                 let path = uri
-                    .as_path()
+                    .to_file_path()
+                    .ok()
                     .with_context(|| format!("{uri} is not a file URL"))?;
                 let source = fs::read(&path).with_context(|| format!("Failed to read {path:?}"))?;
 
@@ -300,7 +305,7 @@ impl GlobalsHoverCache {
 
     pub fn hover(
         &mut self,
-        uri: Uri,
+        uri: Url,
         definition: PositionRange,
         encoding: PositionEncoding,
     ) -> anyhow::Result<String> {

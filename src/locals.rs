@@ -8,6 +8,7 @@ use anyhow::Context;
 use bytes::Bytes;
 use crossbeam_channel::{Receiver, RecvError, RecvTimeoutError, Sender, unbounded};
 use itertools::Itertools;
+use url::Url;
 
 use crate::{
     analyze::{
@@ -19,12 +20,11 @@ use crate::{
     text::{
         Change, Position, PositionEncoding, PositionRange, buffer::TextBuffer, flat_rope::FlatRope,
     },
-    utils::Uri,
 };
 
 pub struct LocalsStore {
     encoding: PositionEncoding,
-    documents: BTreeMap<Uri, Arc<Mutex<Document>>>,
+    documents: BTreeMap<Url, Arc<Mutex<Document>>>,
     background_queue_tx: Sender<BackgroundAction>,
 }
 
@@ -37,14 +37,14 @@ pub struct Document {
 
 enum BackgroundAction {
     Load {
-        uri: Uri,
+        uri: Url,
         document: Arc<Mutex<Document>>,
     },
     Update {
-        uri: Uri,
+        uri: Url,
     },
     Unload {
-        uri: Uri,
+        uri: Url,
     },
 }
 
@@ -63,7 +63,7 @@ impl LocalsStore {
         }
     }
 
-    pub fn load(&mut self, uri: Uri, source: String) -> anyhow::Result<()> {
+    pub fn load(&mut self, uri: Url, source: String) -> anyhow::Result<()> {
         let document = Document::parse(source, self.encoding)?;
 
         let document = Arc::new(Mutex::new(document));
@@ -75,7 +75,7 @@ impl LocalsStore {
         Ok(())
     }
 
-    pub fn update(&mut self, uri: Uri, changes: Vec<Change>) -> anyhow::Result<()> {
+    pub fn update(&mut self, uri: Url, changes: Vec<Change>) -> anyhow::Result<()> {
         {
             let mut document = self.document(&uri)?;
             document.update(changes)?;
@@ -87,7 +87,7 @@ impl LocalsStore {
         Ok(())
     }
 
-    pub fn unload(&mut self, uri: Uri) -> anyhow::Result<()> {
+    pub fn unload(&mut self, uri: Url) -> anyhow::Result<()> {
         self.documents.remove(&uri);
 
         self.background_queue_tx
@@ -96,7 +96,7 @@ impl LocalsStore {
         Ok(())
     }
 
-    pub fn document<'a>(&'a self, uri: &Uri) -> anyhow::Result<MutexGuard<'a, Document>> {
+    pub fn document<'a>(&'a self, uri: &Url) -> anyhow::Result<MutexGuard<'a, Document>> {
         let document = self
             .documents
             .get(uri)

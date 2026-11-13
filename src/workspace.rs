@@ -1,13 +1,14 @@
 use anyhow::Context;
 use itertools::Itertools;
-use lsp_types::{Hover, HoverContents, LanguageString, MarkedString};
+#[expect(deprecated)] // Used below
+use lsp_types::{Contents, Hover, MarkedString, MarkedStringWithLanguage};
+use url::Url;
 
 use crate::{
     analyze::{KEYWORDS, types::SymbolKind},
     globals::{GlobalsHoverCache, GlobalsStore},
     locals::LocalsStore,
     text::{Change, Position, PositionEncoding, PositionRange},
-    utils::Uri,
 };
 
 pub struct Workspace {
@@ -17,7 +18,7 @@ pub struct Workspace {
 }
 
 impl Workspace {
-    pub fn new<'a>(encoding: PositionEncoding, folders: impl IntoIterator<Item = Uri>) -> Self {
+    pub fn new<'a>(encoding: PositionEncoding, folders: impl IntoIterator<Item = Url>) -> Self {
         let locals_store = LocalsStore::new(encoding);
 
         let mut globals_store = GlobalsStore::new(encoding);
@@ -30,15 +31,15 @@ impl Workspace {
         }
     }
 
-    pub fn add_folder(&mut self, uri: &Uri) {
+    pub fn add_folder(&mut self, uri: &Url) {
         self.globals_store.add_workspace_folder(uri);
     }
 
-    pub fn remove_folder(&mut self, uri: &Uri) {
+    pub fn remove_folder(&mut self, uri: &Url) {
         self.globals_store.remove_workspace_folder(uri);
     }
 
-    pub fn open_document(&mut self, uri: Uri, source: String) -> anyhow::Result<()> {
+    pub fn open_document(&mut self, uri: Url, source: String) -> anyhow::Result<()> {
         tracing::info!("Opened {uri}");
 
         self.globals_store.seed(&uri)?;
@@ -48,7 +49,7 @@ impl Workspace {
         Ok(())
     }
 
-    pub fn change_document(&mut self, uri: Uri, changes: Vec<Change>) -> anyhow::Result<()> {
+    pub fn change_document(&mut self, uri: Url, changes: Vec<Change>) -> anyhow::Result<()> {
         tracing::info!("Changed {uri}");
 
         self.locals_store.update(uri, changes)?;
@@ -56,7 +57,7 @@ impl Workspace {
         Ok(())
     }
 
-    pub fn save_document(&mut self, uri: &Uri) -> anyhow::Result<()> {
+    pub fn save_document(&mut self, uri: &Url) -> anyhow::Result<()> {
         tracing::info!("Saved {uri}");
 
         let document = self.locals_store.document(uri)?;
@@ -67,7 +68,7 @@ impl Workspace {
         Ok(())
     }
 
-    pub fn close_document(&mut self, uri: Uri) -> anyhow::Result<()> {
+    pub fn close_document(&mut self, uri: Url) -> anyhow::Result<()> {
         tracing::info!("Closed {uri}");
 
         self.globals_store.unseed(&uri);
@@ -79,9 +80,9 @@ impl Workspace {
 
     pub fn find_definitions(
         &self,
-        uri: &Uri,
+        uri: &Url,
         position: Position,
-    ) -> anyhow::Result<Vec<(Uri, PositionRange)>> {
+    ) -> anyhow::Result<Vec<(Url, PositionRange)>> {
         tracing::info!("Go to definition {uri} {position}");
 
         let document = self.locals_store.document(uri)?;
@@ -110,9 +111,9 @@ impl Workspace {
 
     pub fn find_references(
         &self,
-        uri: &Uri,
+        uri: &Url,
         position: Position,
-    ) -> anyhow::Result<Vec<(Uri, PositionRange)>> {
+    ) -> anyhow::Result<Vec<(Url, PositionRange)>> {
         tracing::info!("Find references {uri} {position}");
 
         let document = self.locals_store.document(uri)?;
@@ -141,7 +142,8 @@ impl Workspace {
         Ok(locations)
     }
 
-    pub fn hover(&self, uri: &Uri, position: Position) -> anyhow::Result<Hover> {
+    #[expect(deprecated)] // TODO: Just return markdown and a range
+    pub fn hover(&self, uri: &Url, position: Position) -> anyhow::Result<Hover> {
         tracing::info!("Hover {uri} {position}");
 
         let definitions = self.find_definitions(uri, position)?;
@@ -152,16 +154,18 @@ impl Workspace {
             .map(|(uri, range)| {
                 if let Some(document) = self.locals_store.document(&uri).ok() {
                     let snippet = document.hover(range);
-                    MarkedString::LanguageString(LanguageString {
+                    MarkedString::MarkedStringWithLanguage(MarkedStringWithLanguage {
                         language: "c".to_owned(),
                         value: snippet,
                     })
                 } else {
                     match cache.hover(uri, range, self.encoding) {
-                        Ok(snippet) => MarkedString::LanguageString(LanguageString {
-                            language: "c".to_owned(),
-                            value: snippet,
-                        }),
+                        Ok(snippet) => {
+                            MarkedString::MarkedStringWithLanguage(MarkedStringWithLanguage {
+                                language: "c".to_owned(),
+                                value: snippet,
+                            })
+                        }
                         Err(err) => MarkedString::String(err.to_string()),
                     }
                 }
@@ -182,14 +186,14 @@ impl Workspace {
         }
 
         Ok(Hover {
-            contents: HoverContents::Array(contents),
+            contents: Contents::MarkedStringList(contents),
             range: Some(ident.range.into()),
         })
     }
 
     pub fn complete<'a>(
         &self,
-        uri: &'a Uri,
+        uri: &'a Url,
         position: Position,
     ) -> anyhow::Result<impl Iterator<Item = (String, SymbolKind)> + 'a> {
         tracing::info!("Complete {uri} {position}");

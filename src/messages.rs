@@ -1,4 +1,4 @@
-use lsp_types::{CompletionList, GotoDefinitionResponse, Hover, Location};
+use lsp_types::{CompletionList, DefinitionResponse, Hover, Location};
 use serde::Serialize;
 
 macro_rules! define_request {
@@ -139,14 +139,14 @@ macro_rules! notification_to_lsp {
 
 define_request! {
     Shutdown = "shutdown",
-    GotoDefinition(GotoDefinitionParams) = "textDocument/definition",
+    Definition(DefinitionParams) = "textDocument/definition",
     FindReferences(ReferenceParams) = "textDocument/references",
     Hover(HoverParams) = "textDocument/hover",
     Completion(CompletionParams) = "textDocument/completion",
 }
 
 define_response! {
-    GotoDefinition(GotoDefinitionResponse),
+    Definition(DefinitionResponse),
     Locations(Vec<Location>),
     Hover(Option<Hover>),
     CompletionList(CompletionList),
@@ -223,7 +223,7 @@ mod tests {
     #[test]
     fn notification_log_message_to_lsp() {
         let params = lsp_types::LogMessageParams {
-            typ: lsp_types::MessageType::INFO,
+            kind: lsp_types::MessageType::Info,
             message: "hello".to_owned(),
         };
         let lsp_notif = lsp_server::Notification::from(Notification::LogMessage(params));

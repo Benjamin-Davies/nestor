@@ -35,7 +35,7 @@ impl<S: Subscriber> Layer<S> for LspLayer {
         if let Some(sender) = LSP_SENDER.get() {
             let _ = sender.send(
                 Notification::LogMessage(LogMessageParams {
-                    typ: level_to_message_type(level),
+                    kind: level_to_message_type(level),
                     message,
                 })
                 .into(),
@@ -48,13 +48,13 @@ impl<S: Subscriber> Layer<S> for LspLayer {
 
 fn level_to_message_type(level: tracing::Level) -> MessageType {
     if level <= tracing::Level::ERROR {
-        MessageType::ERROR
+        MessageType::Error
     } else if level <= tracing::Level::WARN {
-        MessageType::WARNING
+        MessageType::Warning
     } else if level <= tracing::Level::INFO {
-        MessageType::INFO
+        MessageType::Info
     } else {
-        MessageType::LOG
+        MessageType::Log
     }
 }
 
