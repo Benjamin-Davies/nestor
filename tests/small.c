@@ -209,10 +209,13 @@ struct CellArray {
   int ixNx[NB*2];         /* Index of at which we move to the next apEnd[] */
 };
 
+// Before
 enum Foo {
   FOO,
+  // Multiple
+  // Lines
   BAR,
-  BAZ,
+  BAZ, /* After :) */
 };
 
 static int aa, ab[ac] = ad, ae = af;

@@ -4,10 +4,10 @@ use itertools::Itertools;
 
 use crate::{
     analyze::{
-        ARRAY_DECLARATOR_KIND, COMMENT_KIND, DECLARATION_KIND, ENUM_SPECIFIER_KIND,
+        ARRAY_DECLARATOR_KIND, COMMA_KIND, COMMENT_KIND, DECLARATION_KIND, ENUM_SPECIFIER_KIND,
         ENUMERATOR_KIND, FIELD_DECLARATION_KIND, FUNCTION_DECLARATOR_KIND,
         FUNCTION_DEFINITION_KIND, PARAMETER_DECLARATION_KIND, PREPROC_DEF_KIND,
-        PREPROC_FUNCTION_DEF_KIND, STRUCT_SPECIFIER_KIND, TYPE_DEFINITION_KIND,
+        PREPROC_FUNCTION_DEF_KIND, SEMICOLON_KIND, STRUCT_SPECIFIER_KIND, TYPE_DEFINITION_KIND,
         UNION_SPECIFIER_KIND,
     },
     text::{PositionEncoding, PositionRange, buffer::TextBuffer, markdown::Markdown},
@@ -75,15 +75,75 @@ fn find_snippet(
     (ident.start_byte..ident.end_byte, cursor)
 }
 
-fn find_comment(mut cursor: tree_sitter::TreeCursor) -> Option<Range<usize>> {
-    if cursor.goto_previous_sibling() {
-        let node = cursor.node();
-        if node.kind_id() == COMMENT_KIND {
-            return Some(node.byte_range());
-        }
+fn find_comment(cursor: tree_sitter::TreeCursor) -> Option<Range<usize>> {
+    find_comment_before(cursor.clone()).or_else(|| find_comment_after(cursor))
+}
+
+fn find_comment_before(mut cursor: tree_sitter::TreeCursor) -> Option<Range<usize>> {
+    if !cursor.goto_previous_sibling() {
+        return None;
     }
 
-    None
+    let node = cursor.node();
+    if node.kind_id() != COMMENT_KIND {
+        return None;
+    }
+    let end_byte = node.end_byte();
+
+    let start_byte;
+    let mut next_node = node;
+    loop {
+        if !cursor.goto_previous_sibling() {
+            if next_node.kind_id() == COMMENT_KIND {
+                start_byte = next_node.start_byte();
+            } else {
+                start_byte = next_node.end_byte();
+            }
+            break;
+        }
+
+        let node = cursor.node();
+        if node.kind_id() != COMMENT_KIND {
+            if !on_same_line(node, next_node) {
+                start_byte = next_node.start_byte();
+            } else {
+                // next_node is an "after" comment
+                start_byte = next_node.end_byte();
+            }
+            break;
+        }
+
+        next_node = node;
+    }
+
+    if start_byte < end_byte {
+        Some(start_byte..end_byte)
+    } else {
+        None
+    }
+}
+
+fn find_comment_after(mut cursor: tree_sitter::TreeCursor) -> Option<Range<usize>> {
+    let definition = cursor.node();
+    if !cursor.goto_next_sibling() {
+        return None;
+    }
+
+    let mut node = cursor.node();
+    if let COMMA_KIND | SEMICOLON_KIND = node.kind_id() {
+        cursor.goto_next_sibling();
+        node = cursor.node();
+    }
+
+    if node.kind_id() != COMMENT_KIND || !on_same_line(definition, node) {
+        return None;
+    }
+
+    Some(node.byte_range())
+}
+
+fn on_same_line(a: tree_sitter::Node, b: tree_sitter::Node) -> bool {
+    a.end_position().row == b.start_position().row
 }
 
 fn strip_comment(comment: &str) -> String {

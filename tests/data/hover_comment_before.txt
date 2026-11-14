@@ -1,0 +1,14 @@
+"""
+
+````c
+enum Foo {
+  FOO,
+  // Multiple
+  // Lines
+  BAR,
+  BAZ, /* After :) */
+};
+````
+
+Before
+"""

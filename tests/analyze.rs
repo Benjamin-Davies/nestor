@@ -100,6 +100,62 @@ fn test_hover_macro() {
     assert_expected("hover_macro", &hover);
 }
 
+#[test]
+fn test_hover_comment_before() {
+    let source = TextBuffer::from(SMALL_C.to_owned());
+    let tree = parse(SMALL_C.as_bytes(), None).unwrap();
+    let hover = hover::hover(
+        &source,
+        PositionEncoding::Utf8,
+        &tree,
+        "213:4-213:8".parse().unwrap(),
+    );
+
+    assert_expected("hover_comment_before", &hover);
+}
+
+#[test]
+fn test_hover_comment_after() {
+    let source = TextBuffer::from(SMALL_C.to_owned());
+    let tree = parse(SMALL_C.as_bytes(), None).unwrap();
+    let hover = hover::hover(
+        &source,
+        PositionEncoding::Utf8,
+        &tree,
+        "218:2-218:5".parse().unwrap(),
+    );
+
+    assert_expected("hover_comment_after", &hover);
+}
+
+#[test]
+fn test_hover_comment_multiple_lines() {
+    let source = TextBuffer::from(SMALL_C.to_owned());
+    let tree = parse(SMALL_C.as_bytes(), None).unwrap();
+    let hover = hover::hover(
+        &source,
+        PositionEncoding::Utf8,
+        &tree,
+        "217:2-217:5".parse().unwrap(),
+    );
+
+    assert_expected("hover_comment_multiple_lines", &hover);
+}
+
+#[test]
+fn test_hover_comment_none() {
+    let source = TextBuffer::from(SMALL_C.to_owned());
+    let tree = parse(SMALL_C.as_bytes(), None).unwrap();
+    let hover = hover::hover(
+        &source,
+        PositionEncoding::Utf8,
+        &tree,
+        "214:2-214:5".parse().unwrap(),
+    );
+
+    assert_expected("hover_comment_none", &hover);
+}
+
 fn assert_expected(key: &str, value: impl fmt::Debug) {
     let path = format!("tests/data/{key}.txt");
     let contents = format!("{value:#?}");

@@ -43,6 +43,8 @@ macro_rules! kinds {
 
 kinds! {
     identifier = 1;
+    "," (comma) = 7;
+    ";" (semicolon) = 42;
     "[" (left_bracket) = 70;
     "static" (static_keyword) = 71;
     "]" (right_bracket) = 72;
