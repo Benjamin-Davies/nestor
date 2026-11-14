@@ -1,6 +1,6 @@
 use std::fmt;
 
-use pulldown_cmark::{CodeBlockKind, CowStr, Event, Options, Tag, TagEnd};
+use pulldown_cmark::{CodeBlockKind, CowStr, Event, Options, Parser, Tag, TagEnd};
 
 #[derive(Default)]
 pub struct Markdown {
@@ -27,6 +27,11 @@ impl Markdown {
             ))));
         self.events.push(Event::Text(code.into()));
         self.events.push(Event::End(TagEnd::CodeBlock));
+    }
+
+    pub fn push_raw(&mut self, text: &str) {
+        let events = Parser::new(text).map(Event::into_static);
+        self.events.extend(events);
     }
 
     pub fn build_paragraph(&mut self) -> InlineBuilder<'_> {

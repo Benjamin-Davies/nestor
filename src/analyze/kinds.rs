@@ -47,6 +47,7 @@ kinds! {
     "static" (static_keyword) = 71;
     "]" (right_bracket) = 72;
     "=" (equals) = 73;
+    comment = 160;
     preproc_def = 165;
     preproc_function_def = 166;
     preproc_params = 167;
