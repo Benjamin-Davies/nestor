@@ -3,4 +3,7 @@
 ````c
 static const char zMagicHeader[];
 ````
+
+The header string that appears at the beginning of every
+SQLite database.
 """

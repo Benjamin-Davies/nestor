@@ -3,4 +3,10 @@
 ````c
 int sqlite3_enable_shared_cache(int enable);
 ````
+
+Enable or disable the shared pager and schema features.
+
+This routine has no effect on existing database connections.
+The shared cache setting effects only future calls to
+sqlite3_open(), sqlite3_open16(), or sqlite3_open_v2().
 """

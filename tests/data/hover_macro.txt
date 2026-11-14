@@ -3,4 +3,12 @@
 ````c
 #define get2byteNotZero(X)  (((((int)get2byte(X))-1)&0xffff)+1)
 ````
+
+Extract a 2-byte big-endian integer from an array of unsigned bytes.
+But if the value is zero, make it 65536.
+
+This routine is used to extract the "offset to cell content area" value
+from the header of a btree page.  If the page size is 65536 and the page
+is empty, the offset should be 65536, but the 2-byte value stores zero.
+This routine makes the necessary adjustment to 65536.
 """
