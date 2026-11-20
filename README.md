@@ -21,9 +21,8 @@ Nestor is named after the [Kea](https://en.wikipedia.org/wiki/Kea) (*Nestor Nota
 
 ## Usage
 
-You will need [cargo](https://rustup.rs/) and an LSP-compatible editor (e.g. VS Code or Zed).
+Install one of the extensions:
+* Zed: https://github.com/Benjamin-Davies/zed-nestor
+* VS Code: https://marketplace.visualstudio.com/items?itemName=Benjamin-Davies.vscode-nestor
 
-* Install the Nestor language server, e.g. `cargo install --git https://github.com/Benjamin-Davies/nestor`.
-* Install the extension for your editor:
-  * Zed: https://github.com/Benjamin-Davies/zed-nestor
-  * If your editor isn't listed above, you'll need to manually configure the LSP (e.g. https://github.com/zed-industries/zed/discussions/24092#discussioncomment-15278796).
+You can also install the LSP manually: `cargo install --git https://github.com/Benjamin-Davies/nestor`
